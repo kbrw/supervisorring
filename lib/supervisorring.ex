@@ -1,70 +1,121 @@
 defmodule Supervisorring do
-  use GenEvent.Behaviour
-  defrecord State, ring: nil, servers: HashMap.new
-  import Enum
-  @doc "Small process distribution server"
-  def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,[],[])
-  def init(_), do: {:ok,HashSet.new}
+  def global_sup_ref(sup_ref), do: "#{sup_ref}_global_sup"
+  def child_manager_ref(sup_ref), do: "#{sup_ref}_child_manager"
+  def local_sup_ref(sup_ref), do: supref
 
-  def handle_event({:new_ring,oldring,newring},state) do
-    case {oldring.up_set|>to_list,newring.up_set|>to_list} do
-        {unchange,unchange}-> {:ok,state}
-        {_,newnodes} -> {:ok,state.ring(ConstHash.ring_for_nodes(newnodes))}
-    end
-  end
-
-  def handle_call({:new_proc,key,_args},_from,procset) do
-    node = node_for_key(key,:gen_server.call(NanoRing,:get_up) |> Enum.to_list)
-    {:reply,node,procset}
-  end
-
-  defmodule ConstHash do
-    @docmodule "consistent hashing key/node mapping"
-
-    @doc "Map a given key to a node of the ring in a consistent way (ring modifications move a minimum of keys)"
-    def node_for_key(key,ring), do: bfind(key,ring)
-
-    @vnode_per_node 300
-    @doc "generate the node_for_key ring parameter according to a given node list"
-    def ring_for_nodes(nodes) do
-      #Place nodes at @vnode_per_node dots in the hash space {hash(node++vnode_idx),node},
-      #then create a bst adapted to consistent hashing traversal, for a given hash, find the next vnode dot in the ring
-      vnodes = nodes |> flat_map(fn n -> (1..@vnode_per_node |> map &{key_as_int("#{n}#{&1}"),n}) end) 
-      vnodes |> bsplit({0,trunc(:math.pow(2,160)-1)},vnodes|>first)
-    end
-
-    # "place each term into int hash space : term -> 160bits bin -> integer"
-    defp key_as_int(<<key::[size(160),integer]>>),do: key
-    defp key_as_int(key),do: (key |> term_to_binary |> :crypto.sha |> key_as_int)
-
-    # dedicated binary search tree, middle split each interval (easy tree
-    # balancing) except when only one vnode is there (split at vnode hash)
-    defp bsplit([],{_,_},{_,next}), do: next # if no vnode dot in interval, take next node in the ring 
-    defp bsplit([{h,n}],{_,_},{_,next}), do: {h,n,next} # interval contains a vnode split
-    defp bsplit(list,{lbound,rbound},next) do # interval contains multiple vnode, recursivly middle split allows easy tree balancing
-      center = lbound + (rbound - lbound)/2
-      {left,right} = list |> partition(fn {h,_n}->h<center end)
-      {center,bsplit(left,{lbound,center},(right|>first)||next),bsplit(right,{center,rbound},next)}
-    end
-    # bsplit is designed to allow standard btree traversing to associate node to hash
-    defp bfind(_,node) when is_atom(node), do: node
-    defp bfind(k,{center,_,right}) when k > center, do: bfind(k,right)
-    defp bfind(k,{center,left,_}) when k <= center, do: bfind(k,left)
-  end
-end
-
-defmodule Supervisorring.App do
-  use Application.Behaviour
-  def start(_type,_args) do
-    :supervisor.start_link(Supervisorring.App.Sup,[])
-  end
-  defmodule Sup do
+  defmodule GlobalSup do
     use Supervisor.Behaviour
-    def init([]) do
+    def start_link(sup_ref,module_args), do:
+      :supervisor.start_link({:local,sup_ref|>Supervisorring.global_sup_ref},__MODULE__,{sup_ref,module_args})
+    def init({sup_ref,{module,args}}) do
+      {:ok,{strategy,specs}}=module.init(args)
+      Process.link(Process.whereis(Supervisorring.App.Sup.SuperSup))
       supervise([
-        worker(:gen_event,[{:local,NanoRing.Events}], id: NanoRing.Events),
-        worker(NanoRing,[])
-      ], strategy: :one_for_one)
+        supervisor(GlobalSup.LocalSup,[sup_ref,strategy]),
+        worker(GlobalSup.ChildManager,[sup_ref,specs,module])
+      ], strategy: :one_for_all) #Nodes Workers are bounded to directory manager
+    end
+    defmodule LocalSup do
+      use Supervisor.Behaviour
+      def start_link(sup_ref,strategy), do: 
+        :supervisor.start_link({:local,sup_ref|>Supervisorring.local_sup_ref},__MODULE__,strategy)
+      def init(strategy), do: {:ok,{strategy,[]}}
+    end
+    defmodule ChildManager do
+      use GenServer.Behaviour
+      import Enum
+      defrecord State, sup_ref: nil, child_specs: [], callback: nil
+      defmodule RingListener do
+        use GenEvent.Behaviour
+        def handle_event(:new_ring,child_manager) do
+          :gen_server.cast(child_manager,:sync_children)
+          {:ok,child_manager}
+        end
+      end
+
+      def start_link(sup_ref,specs,callback), do:
+        :supervisor.start_link({:local,sup_ref|>Supervisorring.child_manager_ref},__MODULE__,{sup_ref,specs,callback})
+      def init({sup_ref,child_specs,callback}), do:
+        handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback])
+      def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
+        ring = :gen_event.call(Supervisorring.Server.RingListener,:get_ring)
+        cur_children = :supervisor.which_children(sup_ref|>Supervisorring.local_sup_ref) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
+        wanted_children = expand_specs(specs)|>filter(fn {id,_,_,_}->(ring|>ConsistentHash.node_for_key(id)) == node() end)
+                                           |>reduce(HashDict.new,fn {id,_,_,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
+        cur_children |> filter(&not(Dict.has_key?(wanted_children,&1))) |> each fn {id,child,type,modules}->
+          case child do
+            :undefined ->
+            :restarted ->
+            oldpid ->
+              {:already_started,newpid} = :rpc.call(ring|>ConsistentHash.node_for_key(id),
+                :supervisor,:start_child,[sup_ref|>Supervisorring.local_sup_ref,wanted_children|>Dict.get(id)])
+              callback.migrate({id,type,modules},oldpid,newpid)
+              sup_ref |> Supervisorring.local_sup_ref |> :supervisor.terminate_child(id)
+              sup_ref |> Supervisorring.local_sup_ref |> :supervisor.delete_child(id)
+          end
+        end
+        wanted_children |> filter(&not(Dict.has_key?(cur_children,&1)) |> each fn childspec-> 
+          :supervisor.start_child(sup_ref|>Supervisorring.local_sup_ref,childspec)
+        end
+        state
+      end
+      defp expand_specs(specs) do
+        {child_specs,spec_generators} = specs |> partition &is_tuple
+        concat(child_specs,spec_generators |> flat_map &(&1()))
+      end
     end
   end
 end
+
+defmodule :supervisorring do
+  use Behaviour
+  import Supervisorring
+  @doc "process migration function, called before deleting a pid when the ring change"
+  defcallback migrate({id,type,modules},old_pid,new_pid)
+  @doc """
+  callback called when a child has been started dynamically, should be used to
+  maintain the global lists of processes returned by every {:child_spec_gen,fun}
+  """
+  defcallback save_child(child_spec)
+  @doc """
+  supervisor standard callback, but with a new type of childspec to handle an
+  external (global) source of child list (necessary for dynamic child starts,
+  global process list must be maintained externally):
+  standard child_spec : {id,startFunc,restart,shutdown,type,modules}
+  new child_spec : {:child_spec_gen,fun()->[:standard_child_spec]}
+  """
+  defcallback init(args)
+
+  @doc """
+  start supervisorring process, which is a simple erlang supervisor, but the
+  children are dynamically defined as the processes whose "id" is mapped to the
+  current node in the ring. An event handler kills or starts children on ring
+  change if necessary to maintain the proper process distribution.
+  """
+  def start_link(name,module,args), do:
+    :supervisor.start_link(name,Supervisorring.Sup,{name,module,args})
+
+  def start_child(supref,childspec) do
+    rpc.call(:gen_event.call({Supervisorring.ChildManager,sup_ref},:get_ring)|>ConsistentHash.node_for_key(id),
+        :supervisor,:start_child,[sup_ref|>local_sup_ref,childspec])
+  end
+
+  def terminate_child(supref,id) do
+    rpc.call(:gen_event.call({Supervisorring.ChildManager,sup_ref},:get_ring)|>ConsistentHash.node_for_key(id),
+       :supervisor,:terminate_child,[sup_ref|>local_sup_ref,id])
+  end
+
+  def restart_child(supref,id) do
+    rpc.call(:gen_event.call({Supervisorring.ChildManager,sup_ref},:get_ring)|>ConsistentHash.node_for_key(id),
+       :supervisor,:restart_child,[sup_ref|>local_sup_ref,id])
+  end
+
+  def which_children(supref) do
+    
+  end
+
+  def count_children(supref) do
+    
+  end
+end
+
