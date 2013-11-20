@@ -14,17 +14,17 @@ defmodule Supervisorring.App do
     defmodule SuperSup do
       import Enum
       defmodule NodesListener do
-        def handle_event({:new_ring,oldring,newring},state) do
-          case {oldring.up_set|>to_list,newring.up_set|>to_list} do
-            {unchange,unchange}-> {:ok,state}
-            {_,newnodes} -> :gen_event.notify(Supervisorring.Events,:new_ring)
-              {:ok,ConsistentHash.ring_for_nodes(newnodes)}
-          end
+        use GenEvent.Behaviour
+        def handle_event({:new_up_set,_,nodes},state) do
+            IO.puts "new cluster : #{inspect nodes}"
+            :gen_event.notify(Supervisorring.Events,:new_ring)
+            {:ok,ConsistentHash.ring_for_nodes(nodes)}
         end
+        def handle_event({:new_node_set,_,nodes},state), do: {:ok,state}
         def handle_call(:get_ring,ring), do: {:ok,ring,ring}
       end
       use GenServer.Behaviour
-      def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,[nil])
+      def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,nil,[])
       def init(nil) do
         Process.flag(:trap_exit,true)
         :gen_event.add_sup_handler(NanoRing.Events,NodesListener,

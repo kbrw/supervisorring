@@ -34,7 +34,7 @@ defmodule Supervisorring do
       end
 
       def start_link(sup_ref,specs,callback), do:
-        :supervisor.start_link({:local,sup_ref|>Supervisorring.child_manager_ref},__MODULE__,{sup_ref,specs,callback})
+        :gen_server.start_link({:local,sup_ref|>Supervisorring.child_manager_ref},__MODULE__,{sup_ref,specs,callback},[])
       def init({sup_ref,child_specs,callback}), do:
         handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: child_specs,callback: callback])
       def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
@@ -90,7 +90,7 @@ defmodule :supervisorring do
   defcallback init(args::term())
 
   def node_of(id), do:
-    :gen_event.call(Supervisorring.Events, App.SuperSup.NodesListener,:get_ring) |>ConsistentHash.node_for_key(id)
+    :gen_event.call(NanoRing, App.SuperSup.NodesListener,:get_ring) |>ConsistentHash.node_for_key(id)
 
   @doc """
   start supervisorring process, which is a simple erlang supervisor, but the

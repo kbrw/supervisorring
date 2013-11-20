@@ -5,7 +5,7 @@ defmodule ConsistentHash do
   @doc "Map a given key to a node of the ring in a consistent way (ring modifications move a minimum of keys)"
   def node_for_key(ring,key), do: bfind(key_as_int(key),ring)
 
-  @vnode_per_node 300
+  @vnode_per_node 1
   @doc "generate the node_for_key ring parameter according to a given node list"
   def ring_for_nodes(nodes) do
     #Place nodes at @vnode_per_node dots in the key hash space {hash(node++vnode_idx),node},

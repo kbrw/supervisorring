@@ -15,6 +15,8 @@ defmodule Supervisorring.Mixfile do
   end
 
   def application do
-    [ applications: [:nano_ring,:iex], env: [ data_dir: "./data" ] ]
+    [ mod: { Supervisorring.App,[] },
+      applications: [:nano_ring,:iex],
+      env: [ data_dir: "./data" ] ]
   end
 end
