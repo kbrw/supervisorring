@@ -85,11 +85,6 @@ defmodule :supervisorring do
   @doc "process migration function, called before deleting a pid when the ring change"
   defcallback migrate({id::atom(),type:: :worker|:supervisor, modules::[module()]|:dynamic},old_pid::pid(),new_pid::pid())
   @doc """
-  callback called when a child has been started dynamically, should be used to
-  maintain the global lists of processes returned by every {:child_spec_gen,fun}
-  """
-  defcallback save_child(child_spec::term())
-  @doc """
   supervisor standard callback, but with a new type of childspec to handle an
   external (global) source of child list (necessary for dynamic child starts,
   global process list must be maintained externally):
@@ -110,12 +105,22 @@ defmodule :supervisorring do
   def start_link(name,module,args), do:
     Supervisorring.GlobalSup.start_link(name,{module,args})
 
-  def start_child(supref,{id,_,_,_,_,_}=childspec) do
+  @doc """ 
+  save_children_fun is a fn()-> callback that you should use to maintain global
+  process list related to a given {:child_spec_gen,fun} external child list specification
+  """
+  def start_child(supref,{id,_,_,_,_,_}=childspec,save_children_fun) do
     :rpc.call(node_of(id),:supervisor,:start_child,[supref|>local_sup_ref,childspec])
+    save_children_fun.()
   end
 
-  def delete_child(supref,id) do
+  @doc """ 
+  delete_children_fun is a fn()-> callback that you should use to maintain global
+  process list related to a given {:child_spec_gen,fun} external child list specification
+  """
+  def delete_child(supref,id,delete_children_fun) do
     :rpc.call(node_of(id),:supervisor,:delete_child,[supref|>local_sup_ref,id])
+    delete_children_fun.()
   end
 
   def restart_child(supref,id) do
