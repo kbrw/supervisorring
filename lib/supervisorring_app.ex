@@ -31,7 +31,8 @@ defmodule Supervisorring.App do
         {:ok,nil}
       end
       def handle_cast({:terminate,global_sup},nil), do: Process.exit(global_sup,:normal)
-      def handle_info({:EXIT,from,reason},nil) when reason != :normal do
+      def handle_info({:EXIT,from,:normal},nil), do: {:noreply,nil}
+      def handle_info({:EXIT,from,reason},nil) do
         :gen_server.call(NanoRing,:get_up) |> Enum.each fn n ->
           :gen_server.cast({n,__MODULE__},{:terminate,from|>Process.info(:registered_name)})
         end
