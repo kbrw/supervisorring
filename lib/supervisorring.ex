@@ -42,13 +42,15 @@ defmodule Supervisorring do
       end
       def handle_info({:gen_event_EXIT,_,_},_), do: 
         exit(:ring_listener_died)
-      def handle_call({:get_handler,childid},State[child_specs: specs]=state), do:
-        {:reply,specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end),state}
+      def handle_cast({:get_handler,childid,sender},State[child_specs: specs]=state) do
+        sender <- specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
+        {:noreply,state}
+      end
       def handle_call({:get_node,id},state), do:
         {:reply,ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}),state}
-      # reliable execution is ensured by queue serialization of execution on
-      # the same queue (same proc) which change proc according to ring (on :sync_children message)
-      # so we are sure that if "node_for_key"==node then proc associated with id is running on the node
+      # reliable execution is ensured by queueing executions on the same queue
+      # which modify local children according to ring (on :sync_children message) so if
+      # "node_for_key"==node then proc associated with id is running on the node
       def handle_cast({:onnode,id,sender,fun},state) do
         case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
           n when n==node -> sender<-{:executed,fun.()}
@@ -142,10 +144,11 @@ defmodule :supervisorring do
   """
   def start_child(supref,{id,_,_,_,_,_}=childspec) do
   case exec(supref,id,fn-> :supervisor.start_child(supref|>local_sup_ref,childspec) end) do
-      {:ok,child}->
-        case :gen_server.call(child_manager_ref(supref),{:get_handler,id}) do
+      {:ok,child}->:gen_server.cast(child_manager_ref(supref),{:get_handler,id,self})
+        receive do
           {:dyn_child_handler,handler}-> {handler.add(childspec),child}
           _ -> {:error,{:cannot_match_handler,id}}
+          after 10000 -> {:error,:child_server_timeout}
         end
       r -> r
     end
@@ -160,9 +163,11 @@ defmodule :supervisorring do
   """
   def delete_child(supref,id) do
     case exec(supref,id,fn->:supervisor.delete_child(supref|>local_sup_ref,id) end) do
-      :ok-> case :gen_server.call(child_manager_ref(supref),{:get_handler,id}) do
+      :ok->:gen_server.cast(child_manager_ref(supref),{:get_handler,id,self})
+        receive do
           {:dyn_child_handler,handler}-> handler.del(id)
           _ -> {:error,{:cannot_match_handler,id}}
+          after 10000 -> {:error,:child_server_timeout}
         end
       r -> r
     end
