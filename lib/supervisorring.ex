@@ -40,7 +40,10 @@ defmodule Supervisorring do
         {:noreply,state}=handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: child_specs,callback: callback])
         {:ok,state}
       end
-      def handle_info({:gen_event_EXIT,_,_},_), do: exit(:ring_listener_died)
+      def handle_info({:gen_event_EXIT,_,_},_), do: 
+        exit(:ring_listener_died)
+      def handle_call({:get_handler,childid},State[child_specs: specs]=state), do:
+        {:reply,specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end),state}
       def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
         ring = :gen_event.call(NanoRing.Events,Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
         cur_children = :supervisor.which_children(sup_ref|>Supervisorring.local_sup_ref) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
@@ -71,11 +74,19 @@ defmodule Supervisorring do
         {:noreply,state}
       end
       defp expand_specs(specs) do
-        {child_specs,spec_generators} = specs |> partition &is_tuple/1
-        concat(child_specs,spec_generators |> flat_map &(&1.()))
+        {spec_generators,child_specs} = specs |> partition(&match?({:dyn_child_handler,_},&1))
+        concat(child_specs,spec_generators |> flat_map(fn {:dyn_child_handler,handler}->handler.get_all end))
       end
     end
   end
+end
+
+defmodule :dyn_child_handler do
+  use Behaviour
+  defcallback get_all
+  defcallback match(child_id::atom())
+  defcallback add(child_spec :: term())
+  defcallback del(child_id :: atom())
 end
 
 defmodule :supervisorring do
@@ -89,7 +100,8 @@ defmodule :supervisorring do
   external (global) source of child list (necessary for dynamic child starts,
   global process list must be maintained externally):
   standard child_spec : {id,startFunc,restart,shutdown,type,modules}
-  new child_spec : {:child_spec_gen,fun()->[:standard_child_spec]}
+  new child_spec : {:dyn_child_handler,module::dyn_child_handler}
+  works only with :permanent children, because a terminate state is restarted on ring migration
   """
   defcallback init(args::term())
 
@@ -102,25 +114,39 @@ defmodule :supervisorring do
   current node in the ring. An event handler kills or starts children on ring
   change if necessary to maintain the proper process distribution.
   """
-  def start_link(name,module,args), do:
+  def start_link({:local,name},module,args), do:
     Supervisorring.GlobalSup.start_link(name,{module,args})
 
   @doc """ 
-  save_children_fun is a fn()-> callback that you should use to maintain global
-  process list related to a given {:child_spec_gen,fun} external child list specification
+  to maintain global process list related to a given {:child_spec_gen,fun} external child list specification
   """
-  def start_child(supref,{id,_,_,_,_,_}=childspec,save_children_fun) do
-    :rpc.call(node_of(id),:supervisor,:start_child,[supref|>local_sup_ref,childspec])
-    save_children_fun.()
+  def start_child(supref,{id,_,_,_,_,_}=childspec) do
+    case :rpc.call(node_of(id),:supervisor,:start_child,[supref|>local_sup_ref,childspec]) do
+      {:ok,child}->
+        case :gen_server.call(child_manager_ref(supref),{:get_handler,id}) do
+          {:dyn_child_handler,handler}-> {handler.add(childspec),child}
+          _ -> {:error,{:cannot_match_handler,id}}
+        end
+      r -> r
+    end
+  end
+
+  def terminate_child(supref,id) do
+    :rpc.call(node_of(id),:supervisor,:terminate_child,[supref|>local_sup_ref,id])
   end
 
   @doc """ 
-  delete_children_fun is a fn()-> callback that you should use to maintain global
-  process list related to a given {:child_spec_gen,fun} external child list specification
+  to maintain global process list related to a given {:child_spec_gen,fun} external child list specification
   """
-  def delete_child(supref,id,delete_children_fun) do
-    :rpc.call(node_of(id),:supervisor,:delete_child,[supref|>local_sup_ref,id])
-    delete_children_fun.()
+  def delete_child(supref,id) do
+    case :rpc.call(node_of(id),:supervisor,:delete_child,[supref|>local_sup_ref,id]) do
+      :ok->
+        case :gen_server.call(child_manager_ref(supref),{:get_handler,id}) do
+          {:dyn_child_handler,handler}-> handler.del(id)
+          _ -> {:error,{:cannot_match_handler,id}}
+        end
+      r -> r
+    end
   end
 
   def restart_child(supref,id) do
