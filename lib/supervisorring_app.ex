@@ -25,16 +25,23 @@ defmodule Supervisorring.App do
       use GenServer.Behaviour
       def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,nil,[])
       def init(nil) do
-        Process.flag(:trap_exit,true)
         :gen_event.add_sup_handler(NanoRing.Events,NodesListener,
           ConsistentHash.ring_for_nodes(:gen_server.call(NanoRing,:get_up)))
         {:ok,nil}
       end
-      def handle_cast({:terminate,global_sup},nil), do: Process.exit(global_sup,:normal)
-      def handle_info({:EXIT,from,:normal},nil), do: {:noreply,nil}
-      def handle_info({:EXIT,from,reason},nil) do
-        :gen_server.call(NanoRing,:get_up) |> Enum.each fn n ->
-          :gen_server.cast({n,__MODULE__},{:terminate,from|>Process.info(:registered_name)})
+      def handle_cast({:monitor,global_sup_ref},nil) do
+        Process.monitor(global_sup_ref)
+        {:noreply,nil}
+      end
+      def handle_cast({:terminate,global_sup_ref},nil) do
+        true=Process.exit(Process.whereis(global_sup_ref),:kill)
+        {:noreply,nil}
+      end
+      def handle_info({:DOWN,_,:process,_,:killed},nil), do: {:noreply,nil}
+      def handle_info({:DOWN,_,:process,{global_sup_ref,_},_},nil) do
+        IO.puts "try to kill all the other supervisor"
+        :gen_server.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each fn n ->
+          :gen_server.cast({__MODULE__,n},{:terminate,global_sup_ref})
         end
         {:noreply,nil}
       end

@@ -1,6 +1,6 @@
 defmodule Supervisorring do
-  def global_sup_ref(sup_ref), do: :"#{sup_ref}_global_sup"
-  def child_manager_ref(sup_ref), do: :"#{sup_ref}_child_manager"
+  def global_sup_ref(sup_ref), do: :"#{sup_ref}.GlobalSup"
+  def child_manager_ref(sup_ref), do: :"#{sup_ref}.ChildManager"
   def local_sup_ref(sup_ref), do: sup_ref
 
   defmodule GlobalSup do
@@ -9,7 +9,7 @@ defmodule Supervisorring do
       :supervisor.start_link({:local,sup_ref|>Supervisorring.global_sup_ref},__MODULE__,{sup_ref,module_args})
     def init({sup_ref,{module,args}}) do
       {:ok,{strategy,specs}}=module.init(args)
-      Process.link(Process.whereis(Supervisorring.App.Sup.SuperSup))
+      :gen_server.cast(Supervisorring.App.Sup.SuperSup,{:monitor,sup_ref|>Supervisorring.global_sup_ref})
       supervise([
         supervisor(GlobalSup.LocalSup,[sup_ref,strategy]),
         worker(GlobalSup.ChildManager,[sup_ref,specs,module])
@@ -42,10 +42,6 @@ defmodule Supervisorring do
       end
       def handle_info({:gen_event_EXIT,_,_},_), do: 
         exit(:ring_listener_died)
-      def handle_cast({:get_handler,childid,sender},State[child_specs: specs]=state) do
-        sender <- specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
-        {:noreply,state}
-      end
       def handle_call({:get_node,id},state), do:
         {:reply,ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}),state}
       # reliable execution is ensured by queueing executions on the same queue
@@ -56,6 +52,10 @@ defmodule Supervisorring do
           n when n==node -> sender<-{:executed,fun.()}
           othernode -> :gen_server.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,sender,fun})
         end
+        {:noreply,state}
+      end
+      def handle_cast({:get_handler,childid,sender},State[child_specs: specs]=state) do
+        sender <- specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
         {:noreply,state}
       end
       def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
@@ -124,7 +124,7 @@ defmodule :supervisorring do
   """
   def exec(supref,id,fun,timeout // 1000,retry // 3), do:
     try_exec(supref|>child_manager_ref,id,fun,timeout,retry)
-  def try_exec(child_manager,id,fun,timeout,0), do: exit(:ring_unable_to_exec_fun)
+  def try_exec(_,_,_,_,0), do: exit(:ring_unable_to_exec_fun)
   def try_exec(child_manager,id,fun,timeout,nb_try) do
     :gen_server.cast child_manager,{:onnode,id,self,fun}
     receive do {:executed,res} -> res after timeout -> try_exec(child_manager,id,fun,timeout,nb_try-1) end
