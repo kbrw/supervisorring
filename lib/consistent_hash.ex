@@ -12,7 +12,7 @@ defmodule ConsistentHash do
     #then create a bst adapted to consistent hashing traversal, for a given hash, find the next vnode dot in the ring
     vnodes = nodes |> flat_map(fn n -> (1..@vnode_per_node |> map &{key_as_int("#{n}#{&1}"),n}) end) 
                    |> sort(fn {h1,_},{h2,_}->h2>h1 end)
-    vnodes |> bsplit({0,trunc(:math.pow(2,160)-1)},vnodes|>first)
+    vnodes |> bsplit({0,trunc(:math.pow(2,160)-1)},vnodes|>List.first)
   end
 
   # "place each term into int hash space : term -> 160bits bin -> integer"
@@ -26,7 +26,7 @@ defmodule ConsistentHash do
   defp bsplit(list,{lbound,rbound},next) do # interval contains multiple vnode, recursivly middle split allows easy tree balancing
     center = lbound + (rbound - lbound)/2
     {left,right} = list |> split_while(fn {h,_n}->h<center end)
-    {center,bsplit(left,{lbound,center},(right|>first)||next),bsplit(right,{center,rbound},next)}
+    {center,bsplit(left,{lbound,center},(right|>List.first)||next),bsplit(right,{center,rbound},next)}
   end
   # bsplit is designed to allow standard btree traversing to associate node to hash
   defp bfind(_,node) when is_atom(node), do: node
