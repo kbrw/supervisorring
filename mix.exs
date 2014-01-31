@@ -4,7 +4,7 @@ defmodule Supervisorring.Mixfile do
   def project do
     [ app: :supervisorring,
       version: "0.0.1",
-      elixir: "~> 0.11.0",
+      elixir: "~> 0.12.0",
       deps: [{:nano_ring,"0.0.1",git: "git://github.com/awetzel/nano_ring"}],
       ## dev multi nodes configs
       env: [
