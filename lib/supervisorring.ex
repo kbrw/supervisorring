@@ -49,13 +49,13 @@ defmodule Supervisorring do
       # "node_for_key"==node then proc associated with id is running on the node
       def handle_cast({:onnode,id,sender,fun},state) do
         case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
-          n when n==node -> sender<-{:executed,fun.()}
+          n when n==node -> send sender, {:executed,fun.()}
           othernode -> :gen_server.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,sender,fun})
         end
         {:noreply,state}
       end
       def handle_cast({:get_handler,childid,sender},State[child_specs: specs]=state) do
-        sender <- specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
+        send sender, specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
         {:noreply,state}
       end
       def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
