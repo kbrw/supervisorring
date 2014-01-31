@@ -17,7 +17,7 @@ defmodule ConsistentHash do
 
   # "place each term into int hash space : term -> 160bits bin -> integer"
   defp key_as_int(<<key::[size(160),integer]>>),do: key
-  defp key_as_int(key),do: (key |> term_to_binary |> :crypto.sha |> key_as_int)
+  defp key_as_int(key),do: :crypto.hash(:sha, term_to_binary(key)) |> key_as_int
 
   # dedicated binary search tree, middle split each interval (easy tree
   # balancing) except when only one vnode is there (split at vnode hash)
