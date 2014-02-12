@@ -122,7 +122,7 @@ defmodule :supervisorring do
   exec() remotely queued execution to ensure reliability even if a node of the
   ring has just crashed... with nb_try retry if timeout is reached
   """
-  def exec(supref,id,fun,timeout // 1000,retry // 3), do:
+  def exec(supref,id,fun,timeout \\ 1000,retry \\ 3), do:
     try_exec(supref|>child_manager_ref,id,fun,timeout,retry)
   def try_exec(_,_,_,_,0), do: exit(:ring_unable_to_exec_fun)
   def try_exec(child_manager,id,fun,timeout,nb_try) do
