@@ -2,6 +2,6 @@
 /deps
 erl_crash.dump
 *.ez
-*_data
-*.config
 *.swp
+data
+childs

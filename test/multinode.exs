@@ -14,11 +14,11 @@ defmodule MySup do
   @behaviour :dyn_child_handler
   def match(_), do: true
   def get_all, do:
-    File.read!("childs")|>binary_to_term
+    File.read!("childs")|>:erlang.binary_to_term
   def add(childspec), do:
-    File.write!("childs",File.read!("childs") |> binary_to_term |> List.insert_at(0,childspec) |> term_to_binary)
+    File.write!("childs",File.read!("childs") |> :erlang.binary_to_term |> List.insert_at(0,childspec) |> :erlang.term_to_binary)
   def del(childid), do:
-    File.write!("childs",File.read!("childs") |> binary_to_term |> List.keydelete(childid,0) |> term_to_binary)
+    File.write!("childs",File.read!("childs") |> :erlang.binary_to_term |> List.keydelete(childid,0) |> :erlang.term_to_binary)
 
   def start_link, do: :supervisorring.start_link({:local,__MODULE__},MySup,nil)
 end
@@ -31,10 +31,10 @@ end
 defmodule MultiNodeTest do
   use ExUnit.Case
   import Enum
-  @nodes ["dev1","dev2","dev3","dev4"] |> map(&(:"supervisorring_#{&1}@127.0.0.1"))
+  @nodes ["dev1","dev2","dev3","dev4"] |> map(&(:"#{&1}@127.0.0.1"))
   defp sync(sync_atom,master_node) do
     case node do
-      ^master_node-> @nodes|>filter(&(&1!=master_node))|>each &({:testserver,&1}<-sync_atom)
+      ^master_node-> @nodes|>filter(&(&1!=master_node))|>each &(send {:testserver,&1}, sync_atom)
       _ -> receive do
              ^sync_atom -> :ok
              after 30000 -> exit(:impossiblesync)
@@ -48,10 +48,10 @@ defmodule MultiNodeTest do
     Process.register(self,:testserver)
 
     # init external childs to []
-    File.write!("childs",[]|>term_to_binary)
+    File.write!("childs",[]|>:erlang.term_to_binary)
 
     #master node send sync message to others
-    master_node = @nodes |> first
+    master_node = @nodes |> List.first
 
     #calculate targeted topology [nodename: [id1,id2,..], nodename2: [idx,...]]
     ring = ConsistentHash.ring_for_nodes(@nodes)

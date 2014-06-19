@@ -1,10 +1,10 @@
 defmodule Supervisorring.App do
-  use Application.Behaviour
+  use Application
   def start(_type,_args) do
     :supervisor.start_link(Supervisorring.App.Sup,[])
   end
   defmodule Sup do
-    use Supervisor.Behaviour
+    use Supervisor
     def init([]) do
       supervise([
         worker(:gen_event,[{:local,Supervisorring.Events}], id: Supervisorring.Events),

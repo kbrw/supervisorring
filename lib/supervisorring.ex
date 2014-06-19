@@ -4,7 +4,7 @@ defmodule Supervisorring do
   def local_sup_ref(sup_ref), do: sup_ref
 
   defmodule GlobalSup do
-    use Supervisor.Behaviour
+    use Supervisor
     def start_link(sup_ref,module_args), do:
       :supervisor.start_link({:local,sup_ref|>Supervisorring.global_sup_ref},__MODULE__,{sup_ref,module_args})
     def init({sup_ref,{module,args}}) do
@@ -16,17 +16,17 @@ defmodule Supervisorring do
       ], strategy: :one_for_all) #Nodes Workers are bounded to directory manager
     end
     defmodule LocalSup do
-      use Supervisor.Behaviour
+      use Supervisor
       def start_link(sup_ref,strategy), do: 
         :supervisor.start_link({:local,sup_ref|>Supervisorring.local_sup_ref},__MODULE__,strategy)
       def init(strategy), do: {:ok,{strategy,[]}}
     end
     defmodule ChildManager do
-      use GenServer.Behaviour
+      use GenServer
       import Enum
-      defrecord State, sup_ref: nil, child_specs: [], callback: nil, ring: nil
+      defmodule State, do: defstruct(sup_ref: nil, child_specs: [], callback: nil, ring: nil)
       defmodule RingListener do
-        use GenEvent.Behaviour
+        use GenEvent
         def handle_event(:new_ring,child_manager) do
           :gen_server.cast(child_manager,:sync_children)
           {:ok,child_manager}
@@ -37,7 +37,7 @@ defmodule Supervisorring do
         :gen_server.start_link({:local,sup_ref|>Supervisorring.child_manager_ref},__MODULE__,{sup_ref,specs,callback},[])
       def init({sup_ref,child_specs,callback}) do
         :gen_event.add_sup_handler(Supervisorring.Events,RingListener,self)
-        {:noreply,state}=handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: child_specs,callback: callback])
+        {:noreply,state}=handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: child_specs,callback: callback})
         {:ok,state}
       end
       def handle_info({:gen_event_EXIT,_,_},_), do: 
@@ -54,11 +54,11 @@ defmodule Supervisorring do
         end
         {:noreply,state}
       end
-      def handle_cast({:get_handler,childid,sender},State[child_specs: specs]=state) do
+      def handle_cast({:get_handler,childid,sender},%State{child_specs: specs}=state) do
         send sender, specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
         {:noreply,state}
       end
-      def handle_cast(:sync_children,State[sup_ref: sup_ref,child_specs: specs,callback: callback]=state) do
+      def handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: specs,callback: callback}=state) do
         ring = :gen_event.call(NanoRing.Events,Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
         cur_children = :supervisor.which_children(sup_ref|>Supervisorring.local_sup_ref) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
         all_children = expand_specs(specs)|>reduce(HashDict.new,fn {id,_,_,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
@@ -83,7 +83,7 @@ defmodule Supervisorring do
         wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each fn {_,childspec}-> 
           {:ok,_}=:supervisor.start_child(sup_ref|>Supervisorring.local_sup_ref,childspec)
         end
-        {:noreply,state.ring(ring)}
+        {:noreply,%{state|ring: ring}}
       end
       defp expand_specs(specs) do
         {spec_generators,child_specs} = specs |> partition(&match?({:dyn_child_handler,_},&1))

@@ -3,17 +3,9 @@ defmodule Supervisorring.Mixfile do
 
   def project do
     [ app: :supervisorring,
-      version: "0.0.1",
-      elixir: "~> 0.12.0",
-      deps: [{:nano_ring,"0.0.1",git: "git://github.com/awetzel/nano_ring"}],
-      ## dev multi nodes configs
-      env: [
-        dev1: [ config: [nano_ring: [data_dir: "./dev1_data"]] ],
-        dev2: [ config: [nano_ring: [data_dir: "./dev2_data"]] ],
-        dev3: [ config: [nano_ring: [data_dir: "./dev3_data"]] ],
-        dev4: [ config: [nano_ring: [data_dir: "./dev4_data"]] ]
-      ]
-    ]
+      version: "0.0.2",
+      elixir: "~> 0.14.0",
+      deps: [{:nano_ring,"0.0.2",git: "git://github.com/awetzel/nano_ring"}]]
   end
 
   def application do
