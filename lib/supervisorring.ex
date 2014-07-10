@@ -42,8 +42,9 @@ defmodule Supervisorring do
       end
       def handle_info({:gen_event_EXIT,_,_},_), do: 
         exit(:ring_listener_died)
-      def handle_call({:get_node,id},state), do:
+      def handle_call({:get_node,id},_,state), do:
         {:reply,ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}),state}
+
       # reliable execution is ensured by queueing executions on the same queue
       # which modify local children according to ring (on :sync_children message) so if
       # "node_for_key"==node then proc associated with id is running on the node

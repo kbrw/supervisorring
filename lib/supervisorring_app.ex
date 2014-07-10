@@ -13,7 +13,7 @@ defmodule Supervisorring.App do
     end
     defmodule SuperSup do
       defmodule NodesListener do
-        use GenEvent.Behaviour
+        use GenEvent
         def handle_event({:new_up_set,_,nodes},_) do
             IO.puts "new cluster : #{inspect nodes}"
             :gen_event.notify(Supervisorring.Events,:new_ring)
@@ -22,7 +22,7 @@ defmodule Supervisorring.App do
         def handle_event({:new_node_set,_,_},state), do: {:ok,state}
         def handle_call(:get_ring,ring), do: {:ok,ring,ring}
       end
-      use GenServer.Behaviour
+      use GenServer
       def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,nil,[])
       def init(nil) do
         :gen_event.add_sup_handler(NanoRing.Events,NodesListener,
