@@ -82,7 +82,7 @@ defmodule Supervisorring do
           sup_ref |> Supervisorring.local_sup_ref |> :supervisor.delete_child(id)
         end
         wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each fn {_,childspec}-> 
-          {:ok,_}=:supervisor.start_child(sup_ref|>Supervisorring.local_sup_ref,childspec)
+          :supervisor.start_child(sup_ref|>Supervisorring.local_sup_ref,childspec)
         end
         {:noreply,%{state|ring: ring}}
       end
