@@ -92,6 +92,38 @@ defmodule Supervisorring do
       end
     end
   end
+
+  defmacro __using__(_) do
+    quote do
+      @behaviour :dyn_child_handler
+      @behaviour :supervisorring
+      import Supervisor.Spec
+
+      def migrate(_,_,_), do: :ok
+
+      def match(_), do: true
+      def get_all, do: []
+      def add(_), do: :ok
+      def del(_), do: :ok
+
+      def dynamic, do: {:dyn_child_handler,__MODULE__}
+
+      defoverridable [match: 1, get_all: 0, add: 1, del: 1, migrate: 3]
+    end
+  end
+
+  def start_link(module, arg, name: name) when is_atom(name) do
+    :supervisorring.start_link({:local, name}, module, arg)
+  end
+
+  defdelegate [find(supref,id),
+               exec(supref,id,fun,timeout,retry), exec(supref,id,fun,timeout), exec(supref,id,fun),
+               start_child(supref,spec),
+               terminate_child(supref,id),
+               delete_child(supref,id),
+               restart_child(supref,id),
+               which_children(supref),
+               count_children(supref)], to: :supervisorring
 end
 
 defmodule :dyn_child_handler do
