@@ -21,8 +21,9 @@ defmodule ChashTest do
      ring = ring_for_nodes(@nodes)
      ring2 = ring_for_nodes(@nodes ++ [:n8])
      res1_set = @test_set |> map(fn k -> {k,node_for_key(ring,k)} end) 
+     IO.inspect res1_set
      res2_set = @test_set |> map(fn k -> {k,node_for_key(ring2,k)} end) 
-     diff = Set.difference(res1_set|>HashSet.new,res2_set|>HashSet.new) |> Set.size
+     diff = Set.difference(Enum.into(res1_set, HashSet.new), Enum.into(res2_set, HashSet.new)) |> Set.size
      mean_per_node = Enum.count(@test_set)/length(@nodes)
      assert(diff < mean_per_node*1.1)
   end
