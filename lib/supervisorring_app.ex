@@ -15,7 +15,6 @@ defmodule Supervisorring.App do
       defmodule NodesListener do
         use GenEvent
         def handle_event({:new_up_set,_,nodes},_) do
-            IO.puts "new cluster : #{inspect nodes}"
             :gen_event.notify(Supervisorring.Events,:new_ring)
             {:ok,ConsistentHash.ring_for_nodes(nodes)}
         end
@@ -39,7 +38,6 @@ defmodule Supervisorring.App do
       end
       def handle_info({:DOWN,_,:process,_,:killed},nil), do: {:noreply,nil}
       def handle_info({:DOWN,_,:process,{global_sup_ref,_},_},nil) do
-        IO.puts "try to kill all the other supervisor"
         :gen_server.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each fn n ->
           :gen_server.cast({__MODULE__,n},{:terminate,global_sup_ref})
         end

@@ -67,7 +67,6 @@ defmodule Supervisorring do
         remote_children_keys = all_children |> Dict.keys |> filter &(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node)
         wanted_children = all_children |> Dict.drop remote_children_keys
                                              
-        IO.puts "wanted children : #{inspect wanted_children}"
         ## kill all the local children which should not be in the node, get/start child on the correct node to migrate state if needed
         cur_children |> filter(fn {id,_}->not Dict.has_key?(wanted_children,id) end) |> each fn {id,{id,child,type,modules}}->
           new_node = ConsistentHash.node_for_key(ring,{sup_ref,id})
