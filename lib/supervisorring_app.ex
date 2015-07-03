@@ -1,7 +1,7 @@
 defmodule Supervisorring.App do
   use Application
   def start(_type,_args) do
-    :supervisor.start_link(Supervisorring.App.Sup,[])
+    Supervisor.start_link(Supervisorring.App.Sup,[])
   end
   defmodule Sup do
     use Supervisor
@@ -22,10 +22,10 @@ defmodule Supervisorring.App do
         def handle_call(:get_ring,ring), do: {:ok,ring,ring}
       end
       use GenServer
-      def start_link, do: :gen_server.start_link({:local,__MODULE__},__MODULE__,nil,[])
+      def start_link, do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
       def init(nil) do
         :gen_event.add_sup_handler(NanoRing.Events,NodesListener,
-          ConsistentHash.ring_for_nodes(:gen_server.call(NanoRing,:get_up)))
+          ConsistentHash.ring_for_nodes(GenServer.call(NanoRing,:get_up)))
         {:ok,nil}
       end
       def handle_cast({:monitor,global_sup_ref},nil) do
@@ -38,8 +38,8 @@ defmodule Supervisorring.App do
       end
       def handle_info({:DOWN,_,:process,_,:killed},nil), do: {:noreply,nil}
       def handle_info({:DOWN,_,:process,{global_sup_ref,_},_},nil) do
-        :gen_server.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each fn n ->
-          :gen_server.cast({__MODULE__,n},{:terminate,global_sup_ref})
+        GenServer.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each fn n ->
+          GenServer.cast({__MODULE__,n},{:terminate,global_sup_ref})
         end
         {:noreply,nil}
       end

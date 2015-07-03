@@ -6,10 +6,10 @@ defmodule Supervisorring do
   defmodule GlobalSup do
     use Supervisor
     def start_link(sup_ref,module_args), do:
-      :supervisor.start_link({:local,sup_ref|>Supervisorring.global_sup_ref},__MODULE__,{sup_ref,module_args})
+      Supervisor.start_link(__MODULE__,{sup_ref,module_args},name: sup_ref|>Supervisorring.global_sup_ref)
     def init({sup_ref,{module,args}}) do
       {:ok,{strategy,specs}}=module.init(args)
-      :gen_server.cast(Supervisorring.App.Sup.SuperSup,{:monitor,sup_ref|>Supervisorring.global_sup_ref})
+      GenServer.cast(Supervisorring.App.Sup.SuperSup,{:monitor,sup_ref|>Supervisorring.global_sup_ref})
       supervise([
         supervisor(GlobalSup.LocalSup,[sup_ref,strategy]),
         worker(GlobalSup.ChildManager,[sup_ref,specs,module])
@@ -18,7 +18,7 @@ defmodule Supervisorring do
     defmodule LocalSup do
       use Supervisor
       def start_link(sup_ref,strategy), do: 
-        :supervisor.start_link({:local,Supervisorring.local_sup_ref(sup_ref)},__MODULE__,strategy)
+        Supervisor.start_link(__MODULE__,strategy,name: Supervisorring.local_sup_ref(sup_ref))
       def init(strategy), do: {:ok,{strategy,[]}}
     end
     defmodule ChildManager do
@@ -28,13 +28,13 @@ defmodule Supervisorring do
       defmodule RingListener do
         use GenEvent
         def handle_event(:new_ring,child_manager) do
-          :gen_server.cast(child_manager,:sync_children)
+          GenServer.cast(child_manager,:sync_children)
           {:ok,child_manager}
         end
       end
 
       def start_link(sup_ref,specs,callback), do:
-        :gen_server.start_link({:local,sup_ref|>Supervisorring.child_manager_ref},__MODULE__,{sup_ref,specs,callback},[])
+        GenServer.start_link(__MODULE__,{sup_ref,specs,callback}, name: sup_ref|>Supervisorring.child_manager_ref)
       def init({sup_ref,child_specs,callback}) do
         :gen_event.add_sup_handler(Supervisorring.Events,RingListener,self)
         {:noreply,state}=handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: child_specs,callback: callback})
@@ -48,20 +48,20 @@ defmodule Supervisorring do
       # reliable execution is ensured by queueing executions on the same queue
       # which modify local children according to ring (on :sync_children message) so if
       # "node_for_key"==node then proc associated with id is running on the node
-      def handle_cast({:onnode,id,sender,fun},state) do
+      def handle_cast({:onnode,id,{sender,ref},fun},state) do
         case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
-          n when n==node -> send sender, {:executed,fun.()}
-          othernode -> :gen_server.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,sender,fun})
+          n when n==node -> send sender, {ref,:executed,fun.()}
+          othernode -> GenServer.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,sender,fun})
         end
         {:noreply,state}
       end
-      def handle_cast({:get_handler,childid,sender},%State{child_specs: specs}=state) do
-        send sender, specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)
+      def handle_cast({:get_handler,childid,{sender,ref}},%State{child_specs: specs}=state) do
+        send sender, {ref,specs|>filter(&match?({:dyn_child_handler,_},&1))|>find(fn{_,h}->h.match(childid)end)}
         {:noreply,state}
       end
       def handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: specs,callback: callback}=state) do
         ring = :gen_event.call(NanoRing.Events,Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
-        cur_children = :supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
+        cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
         all_children = expand_specs(specs)|>reduce(HashDict.new,fn {id,_,_,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
         ## the tricky point is here, take only child specs with an id which is associate with the current node in the ring
         remote_children_keys = all_children |> Dict.keys |> filter &(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node)
@@ -71,17 +71,17 @@ defmodule Supervisorring do
         cur_children |> filter(fn {id,_}->not Dict.has_key?(wanted_children,id) end) |> each fn {id,{id,child,type,modules}}->
           new_node = ConsistentHash.node_for_key(ring,{sup_ref,id})
           if is_pid(child) do
-            case :rpc.call(new_node,:supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Dict.get(id)]) do
+            case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Dict.get(id)]) do
               {:error,{:already_started,existingpid}}->callback.migrate({id,type,modules},child,existingpid)
               {:ok,newpid}->callback.migrate({id,type,modules},child,newpid)
               _ -> :nothingtodo
             end
-            sup_ref |> Supervisorring.local_sup_ref |> :supervisor.terminate_child(id)
+            sup_ref |> Supervisorring.local_sup_ref |> Supervisor.terminate_child(id)
           end
-          sup_ref |> Supervisorring.local_sup_ref |> :supervisor.delete_child(id)
+          sup_ref |> Supervisorring.local_sup_ref |> Supervisor.delete_child(id)
         end
         wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each fn {_,childspec}-> 
-          :supervisor.start_child(Supervisorring.local_sup_ref(sup_ref),childspec)
+          Supervisor.start_child(Supervisorring.local_sup_ref(sup_ref),childspec)
         end
         {:noreply,%{state|ring: ring}}
       end
@@ -150,7 +150,7 @@ defmodule :supervisorring do
 
   @doc "find node is fast but rely on local ring"
   def find(supref,id), do: 
-    :gen_server.call(Supervisorring.child_manager_ref(supref),{:get_node,id})
+    GenServer.call(Supervisorring.child_manager_ref(supref),{:get_node,id})
   @doc """
   exec() remotely queued execution to ensure reliability even if a node of the
   ring has just crashed... with nb_try retry if timeout is reached
@@ -159,8 +159,9 @@ defmodule :supervisorring do
     try_exec(Supervisorring.child_manager_ref(supref),id,fun,timeout,retry)
   def try_exec(_,_,_,_,0), do: exit(:ring_unable_to_exec_fun)
   def try_exec(child_manager,id,fun,timeout,nb_try) do
-    :gen_server.cast child_manager,{:onnode,id,self,fun}
-    receive do {:executed,res} -> res after timeout -> try_exec(child_manager,id,fun,timeout,nb_try-1) end
+    ref = make_ref
+    GenServer.cast child_manager,{:onnode,id,{self,ref},fun}
+    receive do {^ref,:executed,res} -> res after timeout -> try_exec(child_manager,id,fun,timeout,nb_try-1) end
   end
 
   @doc """
@@ -176,11 +177,12 @@ defmodule :supervisorring do
   to maintain global process list related to a given {:child_spec_gen,fun} external child list specification
   """
   def start_child(supref,{id,_,_,_,_,_}=childspec) do
-  case exec(supref,id,fn-> :supervisor.start_child(Supervisorring.local_sup_ref(supref),childspec) end) do
-      {:ok,child}->:gen_server.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,self})
+    case exec(supref,id,fn-> Supervisor.start_child(Supervisorring.local_sup_ref(supref),childspec) end) do
+      {:ok,child}->ref = make_ref
+        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self,ref}})
         receive do
-          {:dyn_child_handler,handler}-> {handler.add(childspec),child}
-          _ -> {:error,{:cannot_match_handler,id}}
+          {^ref,{:dyn_child_handler,handler}}-> {handler.add(childspec),child}
+          {^ref,_} -> {:error,{:cannot_match_handler,id}}
           after 10000 -> {:error,:child_server_timeout}
         end
       r -> r
@@ -188,15 +190,15 @@ defmodule :supervisorring do
   end
 
   def terminate_child(supref,id) do
-    exec(supref,id,fn->:supervisor.terminate_child(Supervisorring.local_sup_ref(supref),id) end)
+    exec(supref,id,fn->Supervisor.terminate_child(Supervisorring.local_sup_ref(supref),id) end)
   end
 
   @doc """ 
   to maintain global process list related to a given {:child_spec_gen,fun} external child list specification
   """
   def delete_child(supref,id) do
-    case exec(supref,id,fn->:supervisor.delete_child(Supervisorring.local_sup_ref(supref),id) end) do
-      :ok->:gen_server.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,self})
+    case exec(supref,id,fn->Supervisor.delete_child(Supervisorring.local_sup_ref(supref),id) end) do
+      :ok->GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,self})
         receive do
           {:dyn_child_handler,handler}-> handler.del(id)
           _ -> {:error,{:cannot_match_handler,id}}
@@ -207,18 +209,18 @@ defmodule :supervisorring do
   end
 
   def restart_child(supref,id) do
-    exec(supref,id,fn->:supervisor.restart_child(Supervisorring.local_sup_ref(supref),id) end)
+    exec(supref,id,fn->Supervisor.restart_child(Supervisorring.local_sup_ref(supref),id) end)
   end
 
   def which_children(supref) do
-    {res,_}=:rpc.multicall(:gen_server.call(NanoRing,:get_up)|>Enum.to_list,
-                           :supervisor,:which_children,[Supervisorring.local_sup_ref(supref)])
+    {res,_}=:rpc.multicall(GenServer.call(NanoRing,:get_up)|>Enum.to_list,
+                           Supervisor,:which_children,[Supervisorring.local_sup_ref(supref)])
     res |> Enum.concat
   end
 
   def count_children(supref) do
-    {res,_}=:rpc.multicall(:gen_server.call(NanoRing,:get_up)
-            |>Enum.to_list,:supervisor,:count_children,[Supervisorring.local_sup_ref(supref)])
+    {res,_}=:rpc.multicall(GenServer.call(NanoRing,:get_up)
+            |>Enum.to_list,Supervisor,:count_children,[Supervisorring.local_sup_ref(supref)])
     res |> Enum.reduce([],fn(statdict,acc)->acc|>Dict.merge(statdict,fn _,v1,v2->v1+v2 end) end)
   end
 end
