@@ -198,10 +198,12 @@ defmodule :supervisorring do
   """
   def delete_child(supref,id) do
     case exec(supref,id,fn->Supervisor.delete_child(Supervisorring.local_sup_ref(supref),id) end) do
-      :ok->GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,self})
+      :ok->
+        ref = make_ref
+        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self,ref}})
         receive do
-          {:dyn_child_handler,handler}-> handler.del(id)
-          _ -> {:error,{:cannot_match_handler,id}}
+          {^ref,{:dyn_child_handler,handler}}-> handler.del(id)
+          {^ref,_} -> {:error,{:cannot_match_handler,id}}
           after 10000 -> {:error,:child_server_timeout}
         end
       r -> r
