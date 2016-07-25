@@ -23,7 +23,7 @@ defmodule MySup do
   def start_link, do: :supervisorring.start_link({:local,__MODULE__},MySup,nil)
 end
 defmodule GenericServer do
-  use GenServer.Behaviour
+  use GenServer
   def handle_call(:get,_,s), do: {:reply,s,s}
   def handle_cast(new_state,_), do: {:noreply,new_state}
 end
