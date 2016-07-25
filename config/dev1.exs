@@ -1,1 +1,1 @@
-[nano_ring: [data_dir: "data/dev1"]]
+[gen_serverring: [data_dir: "data/dev1"]]
