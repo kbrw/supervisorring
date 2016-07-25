@@ -328,10 +328,12 @@ defmodule :supervisorring do
   end
 
   def which_children(supref) do
+    # here the name of the GenServerring is an issue
+    #ring_name = GenServerring
+    ring_name = :demo_ring
     {res, _} =
       :rpc.multicall(
-        # here the name of the GenServerring is an issue
-        GenServer.call(GenServerring, :get_up) |> Enum.to_list,
+        GenServer.call(ring_name, :get_up) |> Enum.to_list,
         Supervisor,
         :which_children,
         [Supervisorring.local_sup_ref(supref)]
@@ -340,10 +342,12 @@ defmodule :supervisorring do
   end
 
   def count_children(supref) do
+    # here the name of the GenServerring is an issue
+    #ring_name = GenServerring
+    ring_name = :demo_ring
     {res, _} =
       :rpc.multicall(
-        # here the name of the GenServerring is an issue
-        GenServer.call(GenServerRing, :get_up) |> Enum.to_list,
+        GenServer.call(ring_name, :get_up) |> Enum.to_list,
         Supervisor,
         :count_children,
         [Supervisorring.local_sup_ref(supref)]
