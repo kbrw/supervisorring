@@ -64,17 +64,27 @@ Example :
 
 ```elixir
 defmodule MySup do
-  @behaviour :supervisorring
+  use :supervisorring
+	import Supervisor.spec
+
   def migrate({_id,_type,_modules},old_server,new_server), do:
     :gen_server.cast(new_server,{:set_state,:gen_server.call(old_server,:get_state)})
+
   def init(_arg) do
     {:ok,{{:one_for_one,2,3},[
       {:dyn_child_handler,NetFSChildHandler},
-      {MySup.C1,{:gen_server,:start_link,[{:local,MySup.C1},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]},
-      {MySup.C2,{:gen_server,:start_link,[{:local,MySup.C2},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]}
+      worker(GenServer, [GenericServer, nil], id: MySup.C1),
+      worker(GenServer, [GenericServer, nil], id: MySup.C2)
     ]}}
   end
 end
+
+defmodule GenericServer do
+  use GenServer
+  def handle_call(:get, _, s), do: {:reply, s, s}
+  def handle_cast(new_state, _), do: {:noreply, new_state}
+end
+
 # if childs file is shared on every node with a shared fs :
 defmodule NetFSChildHandler do
   @behaviour :dyn_child_handler
@@ -88,7 +98,8 @@ defmodule NetFSChildHandler do
 end
 
 :supervisorring.start_link({:local,MySup},MySup,nil)
-c3 = {MySup.C3,{:gen_server,:start_link,[{:local,MySup.C3},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]}
+import Supervisor.Spec
+c3 = worker(GenServer, [GenericServer, nil], id: MySup.C3)
 :supervisorring.start_child(MySup,c3)
 :gen_server.call({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:youcall)
 # get all childs
