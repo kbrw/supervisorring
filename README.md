@@ -101,7 +101,8 @@ end
 import Supervisor.Spec
 c3 = worker(GenServer, [GenericServer, nil], id: MySup.C3)
 :supervisorring.start_child(MySup,c3)
-:gen_server.call({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:youcall)
+:gen_server.cast({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:youcall)
+:gen_server.call({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:get)
 # get all childs
 :supervisorring.which_children(MySup)
 # get local childs
