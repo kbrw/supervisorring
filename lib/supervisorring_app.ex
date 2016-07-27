@@ -12,15 +12,16 @@ defmodule Supervisorring.App do
       name = Supervisorring.Events
       children =
         [worker(:gen_event, [{:local, name}], id: name),
-         worker(Sup.SuperSup, [])]
+         worker(Sup.SuperSup, ring_name),
+         worker(DHTGenServer, [nil])]
       supervise(children, strategy: :one_for_one)
     end
 
     defmodule SuperSup do
       use GenServer
 
-      defmodule NodesListener do
-        use GenEvent
+      def start_link(ring_name),
+        do: GenServer.start_link(__MODULE__, ring_name, name: __MODULE__)
 
         def handle_event({:new_up_set, _, nodes}, _) do
             :gen_event.notify(Supervisorring.Events, :new_ring)
@@ -28,26 +29,7 @@ defmodule Supervisorring.App do
         end
         def handle_event({:new_node_set, _, _}, state), do: {:ok, state}
 
-        def handle_call(:get_ring, ring), do: {:ok, ring, ring}
-      end
-
-      def start_link do
-        GenServer.start_link(__MODULE__, nil, name: __MODULE__)
-      end
-
-      def init(nil) do
-        # Problem, we need the name of the GenServerring, should we provide it
-        # as argement of init instead of nil?
-        #ring_name = GenServerring
-        ring_name = :demo_ring
-        :gen_event.add_sup_handler(
-          GenServerring.Events,
-          NodesListener,
-          ConsistentHash.ring_for_nodes(GenServer.call(ring_name, :get_up)))
-        {:ok,nil}
-      end
-
-      def handle_cast({:monitor, global_sup_ref}, nil) do
+      def handle_cast({:monitor, global_sup_ref}, state) do
         Process.monitor(global_sup_ref)
         {:noreply, nil}
       end
