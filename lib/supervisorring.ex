@@ -325,7 +325,7 @@ defmodule :supervisorring do
   end
 
   def which_children(supref) do
-    ring_name = Supervisorring.Sup.App.SuperSup.ring_name()
+    ring_name = Supervisorring.App.Sup.SuperSup.ring_name()
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,

@@ -48,7 +48,7 @@ defmodule Supervisorring.App do
         GenServer.call(state, :get_up)
         |> Enum.filter(&(&1 != node))
         |> Enum.each(stop_fun)
-        {:noreply, nil}
+        {:noreply, state}
       end
       def handle_info({:gen_event_EXIT, _, _}, _state),
         do: exit(:ring_listener_died)
