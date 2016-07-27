@@ -32,7 +32,6 @@ defmodule Supervisorring do
           name: Supervisorring.local_sup_ref(sup_ref))
 
       def init(strategy), do: {:ok, {strategy, []}}
-
     end
 
     defmodule ChildManager do
@@ -91,23 +90,21 @@ defmodule Supervisorring do
       def handle_cast({:get_handler, childid, {sender, ref}}, state) do
         handler =
           state.child_specs
-            |> filter(&match?({:dyn_child_handler, _}, &1))
-            |> find(fn{_, h} -> h.match(childid) end)
+          |> filter(&match?({:dyn_child_handler, _}, &1))
+          |> find(fn{_, h} -> h.match(childid) end)
         send(sender, {ref, handler})
         {:noreply, state}
       end
       def handle_cast(:sync_children, %State{sup_ref: sup_ref} = state) do
-        ring =
-          GenEvent.call(GenServerring.Events,
-            Supervisorring.App.Sup.SuperSup.NodesListener, :get_ring)
+        ring = GenServer.call(DHTGenServer, :get_ring)
         cur_children = cur_children(sup_ref)
         wanted_children = wanted_children(state, ring)
 
         migrate_fun =
           fn(child_spec) -> migrate_child(child_spec, ring, state) end
         cur_children
-          |> filter(fn {id, _} -> not Dict.has_key?(wanted_children, id) end)
-          |> each migrate_fun
+        |> filter(fn {id, _} -> not Dict.has_key?(wanted_children, id) end)
+        |> each(migrate_fun)
 
         start_fun =
           fn {_, childspec} ->
@@ -115,8 +112,8 @@ defmodule Supervisorring do
               childspec)
           end
         wanted_children
-          |> filter(fn {id, _} -> not Dict.has_key?(cur_children, id) end)
-          |> each start_fun
+        |> filter(fn {id, _} -> not Dict.has_key?(cur_children, id) end)
+        |> each(start_fun)
 
         {:noreply, %{state | ring: ring}}
       end
@@ -124,7 +121,7 @@ defmodule Supervisorring do
       defp cur_children(sup_ref) do
         fun = fn ({id, _, _, _} = e, dic) -> dic |> Dict.put(id, e) end
         Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref))
-          |> reduce(HashDict.new, fun)
+        |> reduce(HashDict.new, fun)
       end
 
       ## the tricky point is here, take only child specs with an id which is
@@ -134,9 +131,9 @@ defmodule Supervisorring do
         all_children = all_children(specs)
         remote_children_keys =
           all_children
-            |> Dict.keys
-            |> filter &(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node)
-        all_children |> Dict.drop remote_children_keys
+          |> Dict.keys
+          |> filter(&(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node))
+        all_children |> Dict.drop(remote_children_keys)
       end
 
       defp all_children(specs) do
@@ -149,12 +146,12 @@ defmodule Supervisorring do
           specs |> partition(&match?({:dyn_child_handler, _}, &1))
         concat(child_specs,
           spec_generators
-            |> flat_map(fn {:dyn_child_handler,handler} -> handler.get_all end))
+          |> flat_map(fn {:dyn_child_handler, handler} -> handler.get_all end))
       end
 
       ## kill all the local children which should not be in the node,
       ## get/start child on the correct node to migrate state if needed
-      defp migrate_child({id, {id,child,type,modules}}, ring, state) do
+      defp migrate_child({id, {id, child, type, modules}}, ring, state) do
         %State{sup_ref: sup_ref, child_specs: specs, callback: callback} = state
         new_node = ConsistentHash.node_for_key(ring, {sup_ref, id})
         if is_pid(child) do
@@ -170,8 +167,8 @@ defmodule Supervisorring do
             _ -> :nothingtodo
           end
           sup_ref
-            |> Supervisorring.local_sup_ref
-            |> Supervisor.terminate_child(id)
+          |> Supervisorring.local_sup_ref
+          |> Supervisor.terminate_child(id)
         end
         sup_ref |> Supervisorring.local_sup_ref |> Supervisor.delete_child(id)
       end
@@ -263,9 +260,8 @@ defmodule :supervisorring do
   current node in the ring. An event handler kills or starts children on ring
   change if necessary to maintain the proper process distribution.
   """
-  def start_link({:local, name}, module, args) do
-    Supervisorring.GlobalSup.start_link(name, {module, args})
-  end
+  def start_link({:local, name}, module, args),
+    do: Supervisorring.GlobalSup.start_link(name, {module, args})
 
   @doc """
   to maintain global process list related to a given {:child_spec_gen, fun}
@@ -281,7 +277,8 @@ defmodule :supervisorring do
         GenServer.cast(Supervisorring.child_manager_ref(supref),
           {:get_handler, id, {self, ref}})
         receive do
-          {^ref,{:dyn_child_handler,handler}} -> {handler.add(childspec),child}
+          {^ref, {:dyn_child_handler, handler}} ->
+            {handler.add(childspec),child}
           {^ref, _} -> {:error, {:cannot_match_handler, id}}
           after 10000 -> {:error, :child_server_timeout}
         end
@@ -328,9 +325,7 @@ defmodule :supervisorring do
   end
 
   def which_children(supref) do
-    # here the name of the GenServerring is an issue
-    #ring_name = GenServerring
-    ring_name = :demo_ring
+    ring_name = Supervisorring.Sup.App.SuperSup.ring_name()
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,
@@ -342,9 +337,7 @@ defmodule :supervisorring do
   end
 
   def count_children(supref) do
-    # here the name of the GenServerring is an issue
-    #ring_name = GenServerring
-    ring_name = :demo_ring
+    ring_name = Supervisorring.Sup.App.SuperSup.ring_name()
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,

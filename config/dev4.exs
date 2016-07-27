@@ -1,1 +1,4 @@
-[gen_serverring: [data_dir: "data/dev4"]]
+use Mix.Config
+config :gen_serverring, data_dir: "data/dev4"
+config :gen_serverring, name: :test_ring
+config :gen_serverring, callback: TesterRing
