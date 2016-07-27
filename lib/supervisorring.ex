@@ -74,7 +74,7 @@ defmodule Supervisorring do
 
       # reliable execution is ensured by queueing executions on the same queue
       # which modify local children according to ring (on :sync_children
-      # message) so if "node_for_key"==node then proc associated with id is
+      # message) so if "node_for_key" == node then proc associated with id is
       # running on the node
       def handle_cast({:onnode, id, {sender, ref}, fun}, state) do
         case ConsistentHash.node_for_key(state.ring, {state.sup_ref, id}) do
@@ -82,7 +82,7 @@ defmodule Supervisorring do
           othernode ->
             GenServer.cast(
               {state.sup_ref |> Supervisorring.child_manager_ref, othernode},
-              {:onnode, id, sender, fun}
+              {:onnode, id, {sender, ref}, fun}
             )
         end
         {:noreply, state}

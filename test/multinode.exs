@@ -24,6 +24,7 @@ defmodule MySup do
 end
 defmodule GenericServer do
   use GenServer
+  def start_link(_), do: {:ok, nil}
   def handle_call(:get,_,s), do: {:reply,s,s}
   def handle_cast(new_state,_), do: {:noreply,new_state}
 end
