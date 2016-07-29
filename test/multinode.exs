@@ -102,7 +102,7 @@ defmodule MultiNodeTest do
   defp local_children,
     do: :supervisor.which_children(MySup) |> Enum.map fn {id, _, _, _} -> id end
 
-  defp add_nodes(node, node) do
+  defp add_nodes(master_node, master_node) do
     add_node_to_ring =
       fn(n) ->
         :ok = GenServerring.add_node(:test_ring, n)
