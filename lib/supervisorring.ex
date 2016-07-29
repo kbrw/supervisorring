@@ -45,7 +45,7 @@ defmodule Supervisorring do
       defmodule RingListener do
         use GenEvent
 
-        def handle_event(:new_ring, child_manager) do
+        def handle_event({:new_ring, _reason}, child_manager) do
           GenServer.cast(child_manager, :sync_children)
           {:ok, child_manager}
         end
