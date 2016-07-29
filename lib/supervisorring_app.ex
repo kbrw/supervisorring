@@ -34,7 +34,10 @@ defmodule Supervisorring.App do
         {:noreply, state}
       end
       def handle_cast({:terminate, global_sup_ref}, state) do
-        true = Process.exit(Process.whereis(global_sup_ref), :kill)
+        case Process.whereis(global_sup_ref) do
+          nil -> :nothingtodo
+          pid when is_pid(pid) -> true = Process.exit(pid, :kill)
+        end
         {:noreply, state}
       end
 
