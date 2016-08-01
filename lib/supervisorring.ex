@@ -157,7 +157,7 @@ defmodule Supervisorring do
         if is_pid(child) do
           rpc_args =
             [Supervisorring.local_sup_ref(sup_ref),
-              all_children(specs) |> Dict.get(id)]
+              specs |> all_children |> Dict.get(id)]
           is_started = :rpc.call(new_node, Supervisor, :start_child, rpc_args)
           case is_started do
             {:error, {:already_started, existingpid}} ->
@@ -201,7 +201,8 @@ defmodule Supervisorring do
 
   defdelegate [find(supref, id),
                exec(supref, id, fun, timeout, retry),
-               exec(supref, id, fun, timeout), exec(supref, id, fun),
+               exec(supref, id, fun, timeout),
+               exec(supref, id, fun),
                start_child(supref, spec),
                terminate_child(supref, id),
                delete_child(supref, id),
@@ -272,13 +273,13 @@ defmodule :supervisorring do
       fn ->
         Supervisor.start_child(Supervisorring.local_sup_ref(supref), childspec)
       end
+IO.puts("#{:erlang.system_time} #{node} start_child #{id}")
     case exec(supref, id, fun) do
       {:ok, child} -> ref = make_ref
         GenServer.cast(Supervisorring.child_manager_ref(supref),
           {:get_handler, id, {self, ref}})
         receive do
-          {^ref, {:dyn_child_handler, handler}} ->
-            {handler.add(childspec),child}
+          {^ref, {:dyn_child_handler,handler}} -> {handler.add(childspec),child}
           {^ref, _} -> {:error, {:cannot_match_handler, id}}
           after 10000 -> {:error, :child_server_timeout}
         end
@@ -337,7 +338,7 @@ defmodule :supervisorring do
   end
 
   def count_children(supref) do
-    ring_name = Supervisorring.Sup.App.SuperSup.ring_name()
+    ring_name = Supervisorring.App.Sup.SuperSup.ring_name()
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,
