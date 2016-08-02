@@ -273,7 +273,6 @@ defmodule :supervisorring do
       fn ->
         Supervisor.start_child(Supervisorring.local_sup_ref(supref), childspec)
       end
-IO.puts("#{:erlang.system_time} #{node} start_child #{id}")
     case exec(supref, id, fun) do
       {:ok, child} -> ref = make_ref
         GenServer.cast(Supervisorring.child_manager_ref(supref),
