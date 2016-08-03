@@ -27,8 +27,8 @@ defmodule Supervisorring do
     defmodule LocalSup do
       use Supervisor
 
-      def start_link(sup_ref, strategy), do:
-        Supervisor.start_link(__MODULE__, strategy,
+      def start_link(sup_ref, strategy),
+        do: Supervisor.start_link(__MODULE__, strategy,
           name: Supervisorring.local_sup_ref(sup_ref))
 
       def init(strategy), do: {:ok, {strategy, []}}
@@ -39,7 +39,7 @@ defmodule Supervisorring do
       import Enum
 
       defmodule State do
-        defstruct(sup_ref: nil, child_specs: [], callback: nil, ring: nil)
+        defstruct(sup_ref: nil, child_specs: [], callback: nil)
       end
 
       defmodule RingListener do
@@ -68,7 +68,8 @@ defmodule Supervisorring do
       def handle_info({:gen_event_EXIT, _, _}, _), do: exit(:ring_listener_died)
 
       def handle_call({:get_node, id}, _, state) do
-        reply = ConsistentHash.node_for_key(state.ring, {state.sup_ref, id})
+        ring = DHTGenServer.get_ring()
+        reply = ConsistentHash.node_for_key(ring, {state.sup_ref, id})
         {:reply, reply, state}
       end
 
@@ -77,7 +78,8 @@ defmodule Supervisorring do
       # message) so if "node_for_key" == node then proc associated with id is
       # running on the node
       def handle_cast({:onnode, id, {sender, ref}, fun}, state) do
-        case ConsistentHash.node_for_key(state.ring, {state.sup_ref, id}) do
+        ring = DHTGenServer.get_ring()
+        case ConsistentHash.node_for_key(ring, {state.sup_ref, id}) do
           n when n == node -> send sender, {ref, :executed, fun.()}
           othernode ->
             GenServer.cast(
@@ -96,7 +98,8 @@ defmodule Supervisorring do
         {:noreply, state}
       end
       def handle_cast(:sync_children, %State{sup_ref: sup_ref} = state) do
-        ring = GenServer.call(DHTGenServer, :get_ring)
+IO.puts("sync_children")
+        ring = DHTGenServer.get_ring()
         cur_children = cur_children(sup_ref)
         wanted_children = wanted_children(state, ring)
 
@@ -115,7 +118,8 @@ defmodule Supervisorring do
         |> filter(fn {id, _} -> not Dict.has_key?(cur_children, id) end)
         |> each(start_fun)
 
-        {:noreply, %{state | ring: ring}}
+IO.puts("children started")
+        {:noreply, state}
       end
 
       defp cur_children(sup_ref) do
