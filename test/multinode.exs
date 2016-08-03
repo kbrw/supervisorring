@@ -44,12 +44,8 @@ defmodule MySup do
       |> :erlang.term_to_binary)
   end
 
-  def start_link do
-    Process.flag(:trap_exit, true)
-    :supervisorring.start_link({:local, __MODULE__}, MySup, nil)
-  end
-
-  def handle_info({:EXIT, _, :killed}, state), do: {:noreply, state}
+  def start_link,
+    do: :supervisorring.start_link({:local, __MODULE__}, MySup, nil)
 end
 
 defmodule GenericServer do
@@ -149,6 +145,7 @@ defmodule MultiNodeTest do
     {:ok, my_sup_pid} = MySup.start_link
 
     # add nodes to the ring should make the test less boring
+    sync(:adding_nodes, master_node)
     add_nodes(node, master_node)
     sync(:nodes_added, master_node)
 
@@ -164,15 +161,26 @@ defmodule MultiNodeTest do
       ^master_node -> :supervisorring.start_child(MySup, c3)
       _ -> :nothingtodo
     end
-    sync(:child_added, master_node)
+    sync(:child_added, master_node, true)
+
 
     #assert topology on each node match, even with the new child
     assert(topology_withchild[node] || [] == local_children())
 
-    sync(:crash_node, master_node)
-    #terminate one node :
-    if node == c1node, do: (:init.stop; exit(:normal))
-    sync(:node_crashed, master_node)
+    receive do after 3_000 -> :ok end
+
+
+    sync(:crash_node, master_node, true)
+    # terminate one node :
+    if node == c1node do
+			#(:init.stop; exit(:normal))
+      # not using the proper way of stopping a node as I want to test a node
+      # crash and not a node being stopped
+      [sname | _] = Regex.split(~r/@/, Atom.to_string(c1node))
+      {:ok, cwd} = File.cwd
+      System.cmd(cwd <> "/kill-erlang-node.sh", [sname])
+		end
+    sync(:node_crashed, master_node, true)
 
     #assert new topology
     assert(topology_nodedown[node] || [] == local_children())
