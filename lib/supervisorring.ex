@@ -98,7 +98,6 @@ defmodule Supervisorring do
         {:noreply, state}
       end
       def handle_cast(:sync_children, %State{sup_ref: sup_ref} = state) do
-IO.puts("sync_children")
         ring = DHTGenServer.get_ring()
         cur_children = cur_children(sup_ref)
         wanted_children = wanted_children(state, ring)
@@ -118,7 +117,6 @@ IO.puts("sync_children")
         |> filter(fn {id, _} -> not Dict.has_key?(cur_children, id) end)
         |> each(start_fun)
 
-IO.puts("children started")
         {:noreply, state}
       end
 
@@ -354,4 +352,3 @@ defmodule :supervisorring do
     res |> Enum.reduce([], fun)
   end
 end
-

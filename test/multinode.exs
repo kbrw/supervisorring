@@ -161,7 +161,7 @@ defmodule MultiNodeTest do
       ^master_node -> :supervisorring.start_child(MySup, c3)
       _ -> :nothingtodo
     end
-    sync(:child_added, master_node, true)
+    sync(:child_added, master_node)
 
 
     #assert topology on each node match, even with the new child
@@ -170,7 +170,7 @@ defmodule MultiNodeTest do
     receive do after 3_000 -> :ok end
 
 
-    sync(:crash_node, master_node, true)
+    sync(:crash_node, master_node)
     # terminate one node :
     if node == c1node do
 			#(:init.stop; exit(:normal))
@@ -180,7 +180,7 @@ defmodule MultiNodeTest do
       {:ok, cwd} = File.cwd
       System.cmd(cwd <> "/kill-erlang-node.sh", [sname])
 		end
-    sync(:node_crashed, master_node, true)
+    sync(:node_crashed, master_node)
 
     #assert new topology
     assert(topology_nodedown[node] || [] == local_children())
