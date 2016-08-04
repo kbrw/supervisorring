@@ -30,7 +30,7 @@ defmodule Supervisorring.App do
 
       def handle_call(:ring_name, _, state), do: {:reply, state, state}
       def handle_cast({:monitor, global_sup_ref}, state) do
-#        Process.monitor(global_sup_ref)
+        Process.monitor(global_sup_ref)
         {:noreply, state}
       end
       def handle_cast({:terminate, global_sup_ref}, state) do
