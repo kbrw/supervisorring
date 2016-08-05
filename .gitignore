@@ -1,7 +1,8 @@
-/ebin
+/_build
 /deps
+mix.lock
 erl_crash.dump
 *.ez
-*_data
-*.config
 *.swp
+data
+childs

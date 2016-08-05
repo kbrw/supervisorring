@@ -3,22 +3,16 @@ defmodule Supervisorring.Mixfile do
 
   def project do
     [ app: :supervisorring,
-      version: "0.0.1",
-      elixir: "~> 0.11.0",
-      deps: [{:nano_ring,"0.0.1",git: "git://github.com/awetzel/nano_ring"}],
-      ## dev multi nodes configs
-      env: [
-        dev1: [ config: [nano_ring: [data_dir: "./dev1_data"]] ],
-        dev2: [ config: [nano_ring: [data_dir: "./dev2_data"]] ],
-        dev3: [ config: [nano_ring: [data_dir: "./dev3_data"]] ],
-        dev4: [ config: [nano_ring: [data_dir: "./dev4_data"]] ]
-      ]
-    ]
+      version: "0.0.4",
+      elixir: "~> 1.2",
+      deps: [
+        {:gen_serverring, "0.0.1",
+          git: "https://github.com/shopping-adventure/gen_serverring.git"}]]
   end
 
   def application do
-    [ mod: { Supervisorring.App,[] },
-      applications: [:nano_ring,:iex],
-      env: [ data_dir: "./data" ] ]
+    [ mod: {Supervisorring.App, []},
+      applications: [:gen_serverring, :iex],
+      env: [data_dir: "./data", gen_serverring_name: :test_ring]]
   end
 end
