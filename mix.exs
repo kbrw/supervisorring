@@ -13,6 +13,6 @@ defmodule Supervisorring.Mixfile do
   def application do
     [ mod: {Supervisorring.App, []},
       applications: [:gen_serverring, :iex],
-      env: [data_dir: "./data", gen_serverring_name: :test_ring]]
+      env: [data_dir: "./data", gen_serverring_name: [:test_ring]]]
   end
 end

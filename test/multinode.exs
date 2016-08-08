@@ -13,11 +13,12 @@ defmodule MySup do
   end
 
   def init(_arg) do
-    {:ok, {{:one_for_one, 2, 3}, [
-      {:dyn_child_handler, __MODULE__},
-      client_spec(MySup.C1),
-      client_spec(MySup.C2)
-    ]}}
+    {:ok,
+      {{:one_for_one, 2, 3},
+        [{:dyn_child_handler, __MODULE__},
+          client_spec(MySup.C1),
+          client_spec(MySup.C2)],
+        :test_ring}}
   end
 
   @behaviour :dyn_child_handler

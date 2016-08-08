@@ -16,5 +16,7 @@ defmodule TesterRing do
     do: IO.puts("new state #{Crdtex.value(state)}")
 
   def handle_ring_change({nodes, reason}),
-    do: GenServer.cast(DHTGenServer, {:new_ring, reason, nodes})
+    do: handle_ring_change({nodes, :test_ring, reason})
+  def handle_ring_change({nodes, ring_name, reason}),
+    do: GenServer.cast(DHTGenServer, {:new_ring, reason, ring_name, nodes})
 end

@@ -2,33 +2,31 @@ defmodule Supervisorring.App do
   use Application
 
   def start(_type, _) do
-    ring_name = Application.fetch_env!(:supervisorring, :gen_serverring_name)
-    Supervisor.start_link(Supervisorring.App.Sup, [ring_name])
+    ring_names = Application.fetch_env!(:supervisorring, :gen_serverring_name)
+    Supervisor.start_link(Supervisorring.App.Sup, ring_names)
   end
 
   defmodule Sup do
     use Supervisor
 
-    def init(ring_name) do
+    def init(ring_names) do
       name = Supervisorring.Events
       children =
         [worker(:gen_event, [{:local, name}], id: name),
-         worker(Sup.SuperSup, ring_name),
-         worker(DHTGenServer, [nil])]
+         # the ring_name should be kept at ChildManager Level
+         worker(Sup.SuperSup, [nil]),
+         worker(DHTGenServer, [ring_names])]
       supervise(children, strategy: :one_for_one)
     end
 
     defmodule SuperSup do
       use GenServer
 
-      def start_link(ring_name),
-        do: GenServer.start_link(__MODULE__, ring_name, name: __MODULE__)
+      def start_link(_),
+        do: GenServer.start_link(__MODULE__, [nil], name: __MODULE__)
 
-      def ring_name(), do: GenServer.call(__MODULE__, :ring_name)
+      def init(state), do: {:ok, state}
 
-      def init(ring_name), do: {:ok, ring_name}
-
-      def handle_call(:ring_name, _, state), do: {:reply, state, state}
       def handle_cast({:monitor, global_sup_ref}, state) do
         Process.monitor(global_sup_ref)
         {:noreply, state}

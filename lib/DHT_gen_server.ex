@@ -19,9 +19,10 @@ defmodule DHTGenServer do
 
   def handle_cast({:new_ring, reason, new_up_set}, rings),
     do: handle_cast({:new_ring, reason, new_up_set, :default}, rings)
-  def handle_cast({:new_ring, reason, new_up_set, ring_name}, rings) do
+  def handle_cast({:new_ring, reason, ring_name, new_up_set}, rings) do
     ring = ConsistentHash.ring_for_nodes(new_up_set)
+    rings = Map.update!(rings, ring_name, fn(_) -> ring end)
     GenEvent.notify(Supervisorring.Events, {:new_ring, reason})
-    {:noreply, Map.updatet!(rings, ring_name, fn(_) -> ring end)}
+    {:noreply, rings}
   end
 end

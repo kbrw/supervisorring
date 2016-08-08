@@ -14,12 +14,12 @@ defmodule Supervisorring do
         name: sup_ref |> Supervisorring.global_sup_ref)
 
     def init({sup_ref, {module, args}}) do
-      {:ok, {strategy, specs}} = module.init(args)
+      {:ok, {strategy, specs, ring_name}} = module.init(args)
       GenServer.cast(Supervisorring.App.Sup.SuperSup,
         {:monitor, sup_ref |> Supervisorring.global_sup_ref})
       children =
         [supervisor(GlobalSup.LocalSup, [sup_ref, strategy]),
-         worker(GlobalSup.ChildManager, [sup_ref, specs, module])]
+         worker(GlobalSup.ChildManager, [sup_ref, specs, module, ring_name])]
       #Nodes Workers are bounded to directory manager
       supervise(children, strategy: :one_for_all)
     end
@@ -39,7 +39,11 @@ defmodule Supervisorring do
       import Enum
 
       defmodule State do
-        defstruct(sup_ref: nil, child_specs: [], callback: nil)
+        defstruct(
+          sup_ref: nil,
+          child_specs: [],
+          callback: nil,
+          ring_name: :default)
       end
 
       defmodule RingListener do
@@ -52,23 +56,35 @@ defmodule Supervisorring do
 
       end
 
-      def start_link(sup_ref, specs, callback) do
-        GenServer.start_link(__MODULE__, {sup_ref, specs, callback},
+      def start_link(sup_ref, specs, callback, ring_name) do
+        GenServer.start_link(__MODULE__, {sup_ref, specs, callback, ring_name},
           name: sup_ref |> Supervisorring.child_manager_ref)
       end
 
-      def init({sup_ref, child_specs, callback}) do
+      def init({sup_ref, child_specs, callback, ring_name}) do
         :gen_event.add_sup_handler(Supervisorring.Events, RingListener, self)
         state =
-          %State{sup_ref: sup_ref, child_specs: child_specs, callback: callback}
+          %State{
+            sup_ref: sup_ref,
+            child_specs: child_specs,
+            callback: callback,
+            ring_name: ring_name}
         {:noreply, state} = handle_cast(:sync_children, state)
         {:ok, state}
       end
 
+      def ring_name(sup_ref),
+        do:
+          GenServer.call(Supervisorring.child_manager_ref(sup_ref), :ring_name)
+
       def handle_info({:gen_event_EXIT, _, _}, _), do: exit(:ring_listener_died)
 
+      defp get_ring(state), do: DHTGenServer.get_ring(state.ring_name)
+
+      def handle_call(:ring_name, _, %State{ring_name: name} = state),
+        do: {:reply, name, state}
       def handle_call({:get_node, id}, _, state) do
-        ring = DHTGenServer.get_ring()
+        ring = get_ring(state)
         reply = ConsistentHash.node_for_key(ring, {state.sup_ref, id})
         {:reply, reply, state}
       end
@@ -78,7 +94,7 @@ defmodule Supervisorring do
       # message) so if "node_for_key" == node then proc associated with id is
       # running on the node
       def handle_cast({:onnode, id, {sender, ref}, fun}, state) do
-        ring = DHTGenServer.get_ring()
+        ring = get_ring(state)
         case ConsistentHash.node_for_key(ring, {state.sup_ref, id}) do
           n when n == node -> send sender, {ref, :executed, fun.()}
           othernode ->
@@ -98,7 +114,7 @@ defmodule Supervisorring do
         {:noreply, state}
       end
       def handle_cast(:sync_children, %State{sup_ref: sup_ref} = state) do
-        ring = DHTGenServer.get_ring()
+        ring = get_ring(state)
         cur_children = cur_children(sup_ref)
         wanted_children = wanted_children(state, ring)
 
@@ -327,7 +343,7 @@ defmodule :supervisorring do
   end
 
   def which_children(supref) do
-    ring_name = Supervisorring.App.Sup.SuperSup.ring_name()
+    ring_name = Supervisorring.GlobalSup.ChildManager.ring_name(supref)
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,
@@ -339,7 +355,7 @@ defmodule :supervisorring do
   end
 
   def count_children(supref) do
-    ring_name = Supervisorring.App.Sup.SuperSup.ring_name()
+    ring_name = Supervisorring.GlobalSup.ChildManager.ring_name(supref)
     {res, _} =
       :rpc.multicall(
         GenServer.call(ring_name, :get_up) |> Enum.to_list,
