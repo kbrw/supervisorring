@@ -17,8 +17,6 @@ defmodule DHTGenServer do
   def handle_call({:get_ring, ring_name}, _, rings),
     do: {:reply, Map.get(rings, ring_name), rings}
 
-  def handle_cast({:new_ring, reason, new_up_set}, rings),
-    do: handle_cast({:new_ring, reason, new_up_set, :default}, rings)
   def handle_cast({:new_ring, reason, ring_name, new_up_set}, rings) do
     ring = ConsistentHash.ring_for_nodes(new_up_set)
     rings = Map.update!(rings, ring_name, fn(_) -> ring end)
