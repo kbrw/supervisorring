@@ -1,11 +1,14 @@
 defmodule DHTGenServer do
   use GenServer
 
-  def start_link(_), do: GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  def start_link(ring_names),
+    do: GenServer.start_link(__MODULE__, ring_names, name: __MODULE__)
 
-  def init([]) do
+  def init([]), do: init([:default])
+  def init(ring_names) do
     ring = ConsistentHash.ring_for_nodes([node()])
-    {:ok, Map.put(Map.new(), :default, ring)}
+    fun = fn(name, map) -> Map.put(map, name, ring) end
+    {:ok, Enum.reduce(ring_names, Map.new(), fun)}
   end
 
   def get_ring(ring_name \\ :default),
@@ -19,6 +22,6 @@ defmodule DHTGenServer do
   def handle_cast({:new_ring, reason, new_up_set, ring_name}, rings) do
     ring = ConsistentHash.ring_for_nodes(new_up_set)
     GenEvent.notify(Supervisorring.Events, {:new_ring, reason})
-    {:noreply, Map.put(rings, ring_name, ring)}
+    {:noreply, Map.updatet!(rings, ring_name, fn(_) -> ring end)}
   end
 end
