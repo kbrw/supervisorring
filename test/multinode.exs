@@ -59,6 +59,25 @@ defmodule GenericServer do
   def handle_cast(new_state, _), do: {:noreply, new_state}
 end
 
+defmodule TesterRing do
+  use GenServerring
+  require Crdtex
+  require Crdtex.Counter
+
+  def init([]), do: {:ok, Crdtex.Counter.new}
+
+  def handle_info(msg, counter) do
+    IO.puts("got this weird message #{msg}")
+    {:noreply, counter}
+  end
+
+  def handle_state_change(state),
+    do: IO.puts("new state #{Crdtex.value(state)}")
+
+  def handle_ring_change({nodes, ring_name, reason}),
+    do: GenServer.cast(DHTGenServer, {:new_ring, reason, ring_name, nodes})
+end
+
 defmodule MultiNodeTest do
   use ExUnit.Case
   import Enum
@@ -137,9 +156,12 @@ defmodule MultiNodeTest do
       |> filter(&(&1 != c1node))
       |> List.first
 
+    GenServerring.start_link({:test_ring, TesterRing})
+
     #sync all nodes before tests
     receive do after 1000 -> :ok end
     sync(:start_sync, master_node)
+    DHTGenServer.add_rings([:test_ring])
     receive do after 1000 -> :ok end
 
     #start test supervisor
