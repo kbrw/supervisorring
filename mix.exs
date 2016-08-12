@@ -6,7 +6,7 @@ defmodule Supervisorring.Mixfile do
       version: "0.0.4",
       elixir: "~> 1.2",
       deps: [
-        {:gen_serverring, "0.0.2",
+        {:gen_serverring, "~> 0.0.3",
           git: "https://github.com/shopping-adventure/gen_serverring.git"}]]
   end
 
