@@ -151,9 +151,9 @@ defmodule MultiNodeTest do
       get_topology([MySup.C1, MySup.C2, MySup.C3], c1nodedownring)
 
     # master node send sync message to others
-    master_node = # don't pick the one we are going to crash...
+    master_node =
       @nodes
-      |> filter(&(&1 != c1node))
+      |> filter(&(&1 != c1node)) # don't pick the one we are going to crash...
       |> List.first
 
     GenServerring.start_link({:test_ring, TesterRing})
@@ -195,14 +195,15 @@ defmodule MultiNodeTest do
     sync(:crash_node, master_node)
     # terminate one node :
     if node == master_node do
-			#(:init.stop; exit(:normal))
+      #(:init.stop; exit(:normal))
       # not using the proper way of stopping a node as I want to test a node
       # crash and not a node being stopped. Moreovor :init.stop let MySup be
-      # terminated which has the effect of killing MySup on the 3 other nodes
+      # terminated which has the side effect of killing MySup on the 3 other
+      # nodes
       [sname | _] = Regex.split(~r/@/, Atom.to_string(c1node))
       {:ok, cwd} = File.cwd
       {"", 0} = System.cmd(cwd <> "/kill-erlang-node.sh", [sname])
-		end
+    end
     sync(:node_crashed, master_node)
 
     #assert new topology
@@ -212,7 +213,7 @@ defmodule MultiNodeTest do
     assert(Process.alive?(my_sup_pid))
     sync(:end_sync, master_node)
 
-    # error message passed this point are an artefact caused by EXunit killing
+    # error message passed this point are an artefact caused by ExUnit killing
     # MySup at the end of the test, the test is a success if the last assert was
     # sucessful.
 

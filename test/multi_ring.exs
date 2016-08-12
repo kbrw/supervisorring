@@ -15,7 +15,6 @@ defmodule MyApp do
     end
 
     def init(sup_name, ring_name, module) do
-IO.puts("SupRing.init #{sup_name}, #{ring_name}, #{module}")
       {:ok,
         {{:one_for_one, 2, 3},
           [{:dyn_child_handler, module},
@@ -87,7 +86,6 @@ IO.puts("SupRing.init #{sup_name}, #{ring_name}, #{module}")
           worker(sup_name, [{:local, sup_name}], id: sup_name)
         end
       children = [wrk.(MyApp.SupRing1), wrk.(MyApp.SupRing2)]
-IO.inspect(children)
       supervise(children, strategy: :one_for_one)
     end
   end
