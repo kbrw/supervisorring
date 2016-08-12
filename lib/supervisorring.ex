@@ -16,7 +16,7 @@ defmodule Supervisorring do
     def init({sup_ref, {module, args}}) do
       {:ok, {strategy, specs, ring_name}} = module.init(args)
       GenServer.cast(Supervisorring.App.Sup.SuperSup,
-        {:monitor, sup_ref |> Supervisorring.global_sup_ref})
+        {:monitor, Supervisorring.global_sup_ref(sup_ref), ring_name})
       children =
         [supervisor(GlobalSup.LocalSup, [sup_ref, strategy]),
          worker(GlobalSup.ChildManager, [sup_ref, specs, module, ring_name])]
