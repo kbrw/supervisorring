@@ -11,7 +11,7 @@ defmodule Supervisorring do
 
     def start_link(sup_ref, module_args), do:
       Supervisor.start_link(__MODULE__, {sup_ref, module_args},
-        name: sup_ref |> Supervisorring.global_sup_ref)
+        name: Supervisorring.global_sup_ref(sup_ref))
 
     def init({sup_ref, {module, args}}) do
       {:ok, {strategy, specs, ring_name}} = module.init(args)
@@ -58,7 +58,7 @@ defmodule Supervisorring do
 
       def start_link(sup_ref, specs, callback, ring_name) do
         GenServer.start_link(__MODULE__, {sup_ref, specs, callback, ring_name},
-          name: sup_ref |> Supervisorring.child_manager_ref)
+          name: Supervisorring.child_manager_ref(sup_ref))
       end
 
       def init({sup_ref, child_specs, callback, ring_name}) do
@@ -99,7 +99,7 @@ defmodule Supervisorring do
           n when n == node -> send sender, {ref, :executed, fun.()}
           othernode ->
             GenServer.cast(
-              {state.sup_ref |> Supervisorring.child_manager_ref, othernode},
+              {Supervisorring.child_manager_ref(state.sup_ref), othernode},
               {:onnode, id, {sender, ref}, fun}
             )
         end
@@ -140,7 +140,7 @@ defmodule Supervisorring do
       end
 
       defp cur_children(sup_ref) do
-        fun = fn ({id, _, _, _} = e, dic) -> dic |> Dict.put(id, e) end
+        fun = fn ({id, _, _, _} = e, dic) -> Dict.put(dic, id, e) end
         Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref))
         |> reduce(HashDict.new, fun)
       end
@@ -154,12 +154,12 @@ defmodule Supervisorring do
           all_children
           |> Dict.keys
           |> filter(&(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node))
-        all_children |> Dict.drop(remote_children_keys)
+        Dict.drop(all_children, remote_children_keys)
       end
 
       defp all_children(specs) do
-        fun = fn({id, _, _, _, _, _} = e, dic) -> dic |> Dict.put(id, e) end
-        expand_specs(specs) |> reduce(HashDict.new, fun)
+        fun = fn({id, _, _, _, _, _} = e, dic) -> Dict.put(dic, id, e) end
+        specs |> expand_specs |> reduce(HashDict.new, fun)
       end
 
       defp expand_specs(specs) do
@@ -216,9 +216,8 @@ defmodule Supervisorring do
     end
   end
 
-  def start_link(module, arg, name: name) when is_atom(name) do
-    :supervisorring.start_link({:local, name}, module, arg)
-  end
+  def start_link(module, arg, name: sup_name) when is_atom(sup_name),
+    do: :supervisorring.start_link({:local, sup_name}, module, arg)
 
   defdelegate [find(supref, id),
                exec(supref, id, fun, timeout, retry),
@@ -361,13 +360,13 @@ defmodule :supervisorring do
     ring_name = Supervisorring.GlobalSup.ChildManager.ring_name(supref)
     {res, _} =
       :rpc.multicall(
-        GenServer.call(ring_name, :get_up) |> Enum.to_list,
+        ring_name |> GenServer.call(:get_up) |> Enum.to_list,
         Supervisor,
         :count_children,
         [Supervisorring.local_sup_ref(supref)]
       )
     fun =
-      fn (dict, acc) -> acc |> Dict.merge(dict, fn _, v1, v2 -> v1 + v2 end) end
-    res |> Enum.reduce([], fun)
+      fn (dict, acc) -> Dict.merge(acc, dict, fn _, v1, v2 -> v1 + v2 end) end
+    Enum.reduce(res, [], fun)
   end
 end
