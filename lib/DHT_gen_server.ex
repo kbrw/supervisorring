@@ -6,15 +6,14 @@ defmodule DHTGenServer do
 
   def init(ring_names) do
     ring = ConsistentHash.ring_for_nodes([node()])
-    fun = fn(name, map) -> Map.put(map, name, ring) end
-    {:ok, Enum.reduce(ring_names, Map.new(), fun)}
+    {:ok, Map.new(ring_names, fn(name) -> {name, ring} end)}
   end
 
   def add_rings(ring_names),
     do: GenServer.cast(__MODULE__, {:add_rings, ring_names})
 
-  # no remove_rings as it would wrac havoc if we were removing a ring that still
-  # actively used by Supervisorring...
+  # no remove_rings as it would wrac havoc if we were removing a ring that is
+  # still actively used by Supervisorring...
 
   def get_ring(ring_name),
     do: GenServer.call(__MODULE__, {:get_ring, ring_name})
