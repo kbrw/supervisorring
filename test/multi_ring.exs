@@ -130,7 +130,7 @@ defmodule MultiRingTest do
 
   defp n2pid(name), do: Process.whereis(name)
 
-  test "starting an application with 2 supervisorrings" do
+  test "restart of a faulty client in presence of 2 rings" do
 
     # init external childs to []
     File.write!("childs_1", :erlang.term_to_binary([]))
@@ -170,7 +170,7 @@ defmodule MultiRingTest do
     assert global_sup_ref_pid == n2pid(Supervisorring.global_sup_ref(sup_ref))
     assert super_sup_pid == n2pid(super_sup)
 
-    # one crash, local_sup should still be there
+    # one crash, local_sup should still be here
     fail_client(client, sup_ref, 1)
     assert local_sup_ref_pid == n2pid(sup_ref)
 
@@ -180,16 +180,17 @@ defmodule MultiRingTest do
     assert global_sup_ref_pid == n2pid(Supervisorring.global_sup_ref(sup_ref))
     assert super_sup_pid == n2pid(super_sup)
 
-    # five more crashes, global_sup should still be there
-    fail_client(client, sup_ref, 5)
+    # eight more crashes, global_sup should still be here
+    fail_client(client, sup_ref, 8)
     assert global_sup_ref_pid == n2pid(Supervisorring.global_sup_ref(sup_ref))
     assert super_sup_pid == n2pid(super_sup)
 
     # final straw on the camel back global_sup_ref and super_sup affected but
     # ring2 should be unaffected 
-    # why do we need to reach 12 restart of buggy client before getting a
-    # restart of global_sup? I was expecting 9, not 12
-    fail_client(client, sup_ref, 4)
+    # you need 3 restart of client to trigger one restart of local sup
+    # you need 4 restast of local_sup to trigger one restart of global sup.
+    # Hence we get a restart of global_sup after 12 client restarts.
+    fail_client(client, sup_ref, 1)
     assert global_sup_ref_pid != n2pid(Supervisorring.global_sup_ref(sup_ref))
     assert super_sup_pid == n2pid(super_sup)
     assert local_sup_ref2_pid == n2pid(sup_ref2)
