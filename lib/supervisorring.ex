@@ -115,7 +115,7 @@ defmodule Supervisorring do
       end
       def handle_cast({:sync_children, name}, %State{ring_name: name} = state),
         do: handle_cast(:sync_children, state)
-      def handle_cast({:sync_children, _}, state), do: {:no_reply, state}
+      def handle_cast({:sync_children, _}, state), do: {:noreply, state}
       def handle_cast(:sync_children, %State{sup_ref: sup_ref} = state) do
         ring = get_ring(state)
         cur_children = cur_children(sup_ref)
