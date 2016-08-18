@@ -13,11 +13,12 @@ defmodule MySup do
   end
 
   def init(_arg) do
-    {:ok, {{:one_for_one, 2, 3}, [
-      {:dyn_child_handler, __MODULE__},
-      client_spec(MySup.C1),
-      client_spec(MySup.C2)
-    ]}}
+    {:ok,
+      {{:one_for_one, 2, 3},
+        [{:dyn_child_handler, __MODULE__},
+          client_spec(MySup.C1),
+          client_spec(MySup.C2)],
+        :test_ring}}
   end
 
   @behaviour :dyn_child_handler
@@ -56,6 +57,25 @@ defmodule GenericServer do
   def handle_call(:get, _, s), do: {:reply, s, s}
 
   def handle_cast(new_state, _), do: {:noreply, new_state}
+end
+
+defmodule TesterRing do
+  use GenServerring
+  require Crdtex
+  require Crdtex.Counter
+
+  def init([]), do: {:ok, Crdtex.Counter.new}
+
+  def handle_info(msg, counter) do
+    IO.puts("got this weird message #{msg}")
+    {:noreply, counter}
+  end
+
+  def handle_state_change(state),
+    do: IO.puts("new state #{Crdtex.value(state)}")
+
+  def handle_ring_change({nodes, ring_name, reason}),
+    do: GenServer.cast(DHTGenServer, {:new_ring, reason, ring_name, nodes})
 end
 
 defmodule MultiNodeTest do
@@ -131,14 +151,17 @@ defmodule MultiNodeTest do
       get_topology([MySup.C1, MySup.C2, MySup.C3], c1nodedownring)
 
     # master node send sync message to others
-    master_node = # don't pick the one we are going to crash...
+    master_node =
       @nodes
-      |> filter(&(&1 != c1node))
+      |> filter(&(&1 != c1node)) # don't pick the one we are going to crash...
       |> List.first
+
+    GenServerring.start_link({:test_ring, TesterRing})
 
     #sync all nodes before tests
     receive do after 1000 -> :ok end
     sync(:start_sync, master_node)
+    DHTGenServer.add_rings([:test_ring])
     receive do after 1000 -> :ok end
 
     #start test supervisor
@@ -172,14 +195,15 @@ defmodule MultiNodeTest do
     sync(:crash_node, master_node)
     # terminate one node :
     if node == master_node do
-			#(:init.stop; exit(:normal))
+      #(:init.stop; exit(:normal))
       # not using the proper way of stopping a node as I want to test a node
       # crash and not a node being stopped. Moreovor :init.stop let MySup be
-      # terminated which has the effect of killing MySup on the 3 other nodes
+      # terminated which has the side effect of killing MySup on the 3 other
+      # nodes
       [sname | _] = Regex.split(~r/@/, Atom.to_string(c1node))
       {:ok, cwd} = File.cwd
       {"", 0} = System.cmd(cwd <> "/kill-erlang-node.sh", [sname])
-		end
+    end
     sync(:node_crashed, master_node)
 
     #assert new topology
@@ -189,7 +213,7 @@ defmodule MultiNodeTest do
     assert(Process.alive?(my_sup_pid))
     sync(:end_sync, master_node)
 
-    # error message passed this point are an artefact caused by EXunit killing
+    # error message passed this point are an artefact caused by ExUnit killing
     # MySup at the end of the test, the test is a success if the last assert was
     # sucessful.
 
