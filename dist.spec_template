@@ -15,4 +15,5 @@
     ]}
 }.
 
-{suites, [n1, n2, n3, n4], "./ct_test", ct_example_SUITE}.
+{suites, [n1], "./ct_test", client_restart_SUITE}.
+{suites, [n2, n3, n4], "./ct_test", ct_example_SUITE}.

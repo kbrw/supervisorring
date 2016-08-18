@@ -26,14 +26,14 @@ defmodule N1Test do
     Supervisor.start_link(MyApp.Sup, nil)
 
     # add all nodes to the rings
-    for ring <- context.ring_names,
-        node_name <- context.ring_nodes,
-        do: add_node(ring, node_name)
+    :ct.sleep(5_000)
+#    for ring <- context.ring_names,
+#        node_name <- context.ring_nodes,
+#        do: add_node(ring, node_name)
 
     # set all the clients state
     Enum.each(context.supervisors, fn(s) -> set_all_clients(s) end)
 
-    :ct.sleep(2_000)
 
     # check that all clients have been set
     for sup <- context.supervisors,

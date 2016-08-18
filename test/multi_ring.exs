@@ -185,8 +185,8 @@ defmodule MultiRingTest do
     assert global_sup_ref_pid == n2pid(Supervisorring.global_sup_ref(sup_ref))
     assert super_sup_pid == n2pid(super_sup)
 
-    # final straw on the camel back global_sup_ref and super_sup affected but
-    # ring2 should be unaffected 
+    # final straw on the camel back global_sup_ref retstarded. ring2 should be
+    # unaffected
     # you need 3 restart of client to trigger one restart of local sup
     # you need 4 restast of local_sup to trigger one restart of global sup.
     # Hence we get a restart of global_sup after 12 client restarts.
