@@ -12,9 +12,9 @@ all() -> [example_test].
 % Code.load_file/1 them. If different suites need different codes to be loaded
 % it is a good place to deal with it.
 init_per_suite(Config) ->
-    File = filename:join(ct_elixir_wrapper:test_dir(), "test_util.exs"),
-    'Elixir.Code':load_file(list_to_binary(File)),
-		Config.
+    ct_elixir_wrapper:elixir_file("test_util.exs"),
+    ct_elixir_wrapper:elixir_file("buggy_client.exs"),
+    Config.
 
 % you can use classical (erlang test) or launch an ExUnit test file. In the
 % later case, simply run the file with ct_elixir_wrapper:run_elixir_test/1
