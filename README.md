@@ -142,3 +142,14 @@ local_sup -> children` so that :
 This way children supervised by `supervisorring` can be supervised
 globally in a similar fashion as `local_supervision` locally.
 
+## Testing ##
+Tests using several nodes are relying on [erlang
+common_test](http://erlang.org/doc/apps/common_test/index.html). You can use the
+script `ct_tests.sh` both to generate a spec file for `ct_master` and to launch
+ct_master so that `ct` is able to run `ExUnit` test cases. The generated file
+will run the `*.SUITE.erl` files found in the ct_test directory. Edit the
+generated file (or write your own) to run only a subset of the suites.
+
+For the moment all the nodes used by ct_master have to be on the same host. This
+will be adressed later. This is a limitation of the way the tests are written,
+not a limitation of ct.
