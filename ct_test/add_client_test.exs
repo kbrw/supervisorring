@@ -13,29 +13,27 @@ defmodule AddClientTest do
   end
   
   @tag ring_names: [:test_ring]
-  @tag ring_nodes: [:n5, :n6, :n7, :n8]
+  @tag ring_nodes: [:n5, :n6]
   test "adding a child to a running cluster", context do
     ring_name = hd(context.ring_names)
-    node_to_add = CtUtil.node_name(hd(context.ring_nodes))
+    nodes = Enum.map(context.ring_nodes, fn(n) -> CtUtil.node_name(n) end)
+    node_to_add = hd(nodes)
 
-    ring = ConsistentHash.ring_for_nodes(context.ring_nodes)
+    ring = ConsistentHash.ring_for_nodes(nodes)
     topology =
-      RingUtil.get_topology(
-        [MySmallApp.Sup.C1, MySmallApp.Sup.C2],
-        ring,
-        MySmallApp.Sup
-      )
+      RingUtil.get_topology([MySmallApp.SupRing.C1, MySmallApp.SupRing.C2],
+        ring, MySmallApp.SupRing)
     topologywithchild =
       RingUtil.get_topology(
-        [MySmallApp.Sup.C1, MySmallApp.Sup.C2, MySmallApp.Sup.C3],
+        [MySmallApp.SupRing.C1, MySmallApp.SupRing.C2, MySmallApp.SupRing.C3],
         ring,
-        MySmallApp.Sup
+        MySmallApp.SupRing
       )
 
     File.write!("childs", :erlang.term_to_binary([]))
     Supervisor.start_link(MySmallApp.Sup, nil)
     GenServerring.add_node(ring_name, node_to_add)
-    :ct.sleep(5_000) # afer five gossip, all nodes should have the complete ring
+    :ct.sleep(2_000) # afer two gossips, all nodes should have the complete ring
 
     assert(topology[node] || [] == RingUtil.local_children(MySmallApp.SupRing))
 
