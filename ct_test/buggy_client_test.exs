@@ -14,7 +14,7 @@ defmodule BuggyClientTest do
 
   @tag ring_names: [:test_ring1, :test_ring2]
   @tag ring_nodes: [:n1, :n2, :n3, :n4]
-  # basically the same test that the one done by multi_ring.exs but on several
+  # basically the same test than the one done by multi_ring.exs but on several
   # nodes :)
   test "handling of a buggy client", context do
     # initialize

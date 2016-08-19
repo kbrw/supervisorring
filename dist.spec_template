@@ -2,7 +2,7 @@
 {logdir, all_nodes, "./ct_logs"}.
 {logdir, master, "./ct_logs"}.
 
-{init, [n1, n2, n3, n4],
+{init, [n1, n2, n3, n4, n5, n6, n7, n8],
     {node_start, [
         {monitor_master, true},
         {boot_timeout, 10},
@@ -17,3 +17,4 @@
 
 {suites, [n1], "./ct_test", client_restart_SUITE}.
 {suites, [n2, n3, n4], "./ct_test", ct_example_SUITE}.
+{suites, [n5, n6, n7, n8], "./ct_test", add_client_SUITE}.
