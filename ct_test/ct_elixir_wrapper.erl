@@ -6,7 +6,7 @@
 
 -module(ct_elixir_wrapper).
 
--export([init/0, run_elixir_test/1, elixir_file/1]).
+-export([init/0, run_elixir_test/1, test_dir/0, elixir_file/1]).
 
 init() ->
     clone_path(hd(nodes())),

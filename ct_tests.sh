@@ -16,10 +16,9 @@ cd ..
 
 HOST=`hostname`
 
-# generate a spec file for two clusters of 4 nodes with all nodes on
-# local host
+# generate a spec file for a few clusters with all nodes on local host
 if [ ! -e $1 ] ; then
-	for NODE in n1 n2 n3 n4 n5 n6 n7 n8
+	for NODE in n1 n2 n3 n4 n5 n6 n7 n8 n9
 		do echo "{node, $NODE, $NODE@$HOST}." >> $1
 	done
 	cat dist.spec_template >> $1
