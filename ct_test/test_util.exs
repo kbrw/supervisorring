@@ -25,15 +25,7 @@ defmodule CtUtil do
 
 end
 
-defmodule TesterRing do # GenServerring callback
-  use GenServerring.Supervisorring.Link
-  require Crdtex
-  require Crdtex.Counter
-
-  def init([]), do: {:ok, Crdtex.Counter.new}
-  def handle_state_change(_), do: :ok
-end
-
+# one app with 6 clients on one ring and 6 other clients on an other ring
 defmodule MyApp do
   use Application
 
@@ -48,17 +40,15 @@ defmodule MyApp do
         :permanent, 2, :worker, [GenericServer]}
     end
 
-    def init(sup_name, ring_name, module) do
+    def init(sup_name, ring_name, module, clients \\ ["C1", "C2"]) do
+      children = for c <- clients, do: client_spec(:"#{sup_name}.#{c}")
       {:ok,
-        {{:one_for_one, 2, 3},
-          [{:dyn_child_handler, module},
-            client_spec(:"#{sup_name}.C1"),
-            client_spec(:"#{sup_name}.C2"),
-            client_spec(:"#{sup_name}.C3"),
-            client_spec(:"#{sup_name}.C4"),
-            client_spec(:"#{sup_name}.C5"),
-            client_spec(:"#{sup_name}.C6")],
-          ring_name}}
+        {
+          {:one_for_one, 2, 3},
+          [{:dyn_child_handler, module} | children],
+          ring_name
+        }
+      }
     end
 
     def add(childspec, file) do
@@ -84,8 +74,10 @@ defmodule MyApp do
     use Supervisorring
 
     def migrate(a, b, c), do: MyApp.SupRing.migrate(a, b, c)
-    def init(ring_name),
-      do: MyApp.SupRing.init(__MODULE__, ring_name, __MODULE__)
+    def init(ring_name) do
+      MyApp.SupRing.init(__MODULE__, ring_name, __MODULE__,
+        ["C1", "C2", "C3", "C4", "C5", "C6"])
+    end
     @behaviour :dyn_child_handler
     def match(_), do: true
     def get_all, do: "childs_1" |> File.read! |> :erlang.binary_to_term
@@ -100,8 +92,10 @@ defmodule MyApp do
     use Supervisorring
 
     def migrate(a, b, c), do: MyApp.SupRing.migrate(a, b, c)
-    def init(ring_name),
-      do: MyApp.SupRing.init(__MODULE__, ring_name, __MODULE__)
+    def init(ring_name) do
+      MyApp.SupRing.init(__MODULE__, ring_name, __MODULE__,
+        ["C1", "C2", "C3", "C4", "C5", "C6"])
+    end
     @behaviour :dyn_child_handler
     def match(_), do: true
     def get_all, do: "childs_2" |> File.read! |> :erlang.binary_to_term

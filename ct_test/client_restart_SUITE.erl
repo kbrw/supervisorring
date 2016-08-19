@@ -9,6 +9,7 @@ all() -> [client_restart_test].
 init_per_suite(Config) ->
     ct_elixir_wrapper:elixir_file("test_util.exs"),
     ct_elixir_wrapper:elixir_file("buggy_client.exs"),
+    ct_elixir_wrapper:elixir_file("standard_ring.exs"),
     Config.
 
 client_restart_test(_) ->
