@@ -10,6 +10,7 @@ init_per_suite(Config) ->
     ct_elixir_wrapper:elixir_file("test_util.exs"),
     ct_elixir_wrapper:elixir_file("ring_util.exs"),
     ct_elixir_wrapper:elixir_file("my_small_app.exs"),
+    ct_elixir_wrapper:elixir_file("standard_ring.exs"),
 		Config.
 
 add_client_test(_) ->
