@@ -35,6 +35,7 @@ defmodule CrashNodeTest do
 
 
     File.write!("childs", :erlang.term_to_binary([]))
+    DHTGenServer.add_rings(context.ring_names) # empty ring
     Supervisor.start_link(MySmallApp.Sup, nil)
     GenServerring.add_node(ring_name, node_to_add)
     :ct.sleep(5_000) # afer five gossip, all nodes should have the complete ring

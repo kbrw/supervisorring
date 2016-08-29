@@ -23,13 +23,11 @@ defmodule N1Test do
     File.write!("childs_2", :erlang.term_to_binary([]))
 
     # start « App »
+    DHTGenServer.add_rings(context.ring_names) # empty rings
     Supervisor.start_link(MyApp.Sup, nil)
 
-    # add all nodes to the rings
+    # give time to gossips to add  nodes to the rings
     :ct.sleep(5_000)
-#    for ring <- context.ring_names,
-#        node_name <- context.ring_nodes,
-#        do: add_node(ring, node_name)
 
     # set all the clients state
     Enum.each(context.supervisors, fn(s) -> set_all_clients(s) end)

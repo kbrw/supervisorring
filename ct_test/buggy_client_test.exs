@@ -16,12 +16,13 @@ defmodule BuggyClientTest do
   @tag ring_nodes: [:n1, :n2, :n3, :n4]
   # basically the same test than the one done by multi_ring.exs but on several
   # nodes :)
-  test "handling of a buggy client", context do
+  test "handling of a buggy client on an empty ring", context do
     # initialize
     File.write!("childs_1", :erlang.term_to_binary([]))
     File.write!("childs_2", :erlang.term_to_binary([]))
 
     # start « App »
+    DHTGenServer.add_rings(context.ring_names) # empty rings
     Supervisor.start_link(MyApp.Sup, nil)
 
     # add all nodes to the rings

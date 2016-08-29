@@ -22,12 +22,20 @@ defmodule DHTGenServer do
     do: {:reply, Map.get(rings, ring_name), rings}
 
   def handle_cast({:add_rings, ring_names}, rings) do
-    ring = ConsistentHash.ring_for_nodes([node()])
     fun =
       fn(name, map) ->
         case Map.has_key?(map, name) do
           true -> map # do not alter an existing ring
           false ->
+            ring_nodes =
+              try do
+                GenServerring.up(name)
+              rescue
+                _ -> [node()]
+              catch
+                _ -> [node()]
+              end
+            ring = ConsistentHash.ring_for_nodes(ring_nodes)
             Map.put(map, name, ring)
         end
       end

@@ -31,9 +31,10 @@ defmodule AddClientTest do
       )
 
     File.write!("childs", :erlang.term_to_binary([]))
-    Supervisor.start_link(MySmallApp.Sup, nil)
     GenServerring.add_node(ring_name, node_to_add)
     :ct.sleep(2_000) # afer two gossips, all nodes should have the complete ring
+    DHTGenServer.add_rings(context.ring_names) # ring fully up
+    Supervisor.start_link(MySmallApp.Sup, nil)
 
     assert(topology[node] || [] == RingUtil.local_children(MySmallApp.SupRing))
 
