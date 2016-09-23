@@ -7,3 +7,5 @@ erl_crash.dump
 *.beam
 data
 childs
+/ct_logs
+/test.spec
