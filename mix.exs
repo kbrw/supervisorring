@@ -3,7 +3,7 @@ defmodule Supervisorring.Mixfile do
 
   def project do
     [ app: :supervisorring,
-      version: "0.0.4",
+      version: "0.1.0",
       elixir: "~> 1.2",
       deps: [
         {:gen_serverring, "~> 0.0.3",

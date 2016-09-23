@@ -13,8 +13,7 @@ defmodule Supervisorring do
       Supervisor.start_link(__MODULE__, {sup_ref, module_args},
         name: Supervisorring.global_sup_ref(sup_ref))
 
-    def init({sup_ref, {module, args}}) do
-      {:ok, {strategy, specs, ring_name}} = module.init(args)
+    def init({sup_ref, {module, {ring_name, strategy, specs}}}) do
       GenServer.cast(Supervisorring.App.Sup.SuperSup,
         {:monitor, Supervisorring.global_sup_ref(sup_ref), ring_name})
       children =

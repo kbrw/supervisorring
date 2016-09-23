@@ -43,12 +43,8 @@ defmodule MyApp do
     def init(sup_name, ring_name, module, clients \\ ["C1", "C2"]) do
       children = for c <- clients, do: client_spec(:"#{sup_name}.#{c}")
       {:ok,
-        {
-          {:one_for_one, 2, 3},
-          [{:dyn_child_handler, module} | children],
-          ring_name
-        }
-      }
+        {ring_name, {:one_for_one, 2, 3},
+          [{:dyn_child_handler, module} | children]}}
     end
 
     def add(childspec, file) do
@@ -84,7 +80,8 @@ defmodule MyApp do
     def add(childspec), do: MyApp.SupRing.add(childspec, "childs_1")
     def del(childspec), do: MyApp.SupRing.del(childspec, "childs_1")
     def start_link(sup_name) do
-      :supervisorring.start_link(sup_name, __MODULE__, :test_ring1)
+      {ok, args} = MyApp.SupRing1.init(:test_ring1)
+      :supervisorring.start_link(sup_name, __MODULE__, args)
     end
   end # MyApp.SupRing1
 
@@ -102,7 +99,8 @@ defmodule MyApp do
     def add(childspec), do: MyApp.SupRing.add(childspec, "childs_2")
     def del(childspec), do: MyApp.SupRing.del(childspec, "childs_2")
     def start_link(sup_name) do
-      :supervisorring.start_link(sup_name, __MODULE__, :test_ring2)
+      {ok, args} = MyApp.SupRing2.init(:test_ring2)
+      :supervisorring.start_link(sup_name, __MODULE__, args)
     end
   end # MyApp.SupRing2
 

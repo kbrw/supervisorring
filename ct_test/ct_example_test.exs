@@ -32,19 +32,19 @@ defmodule N1Test do
     # set all the clients state
     Enum.each(context.supervisors, fn(s) -> set_all_clients(s) end)
 
-
     # check that all clients have been set
     for sup <- context.supervisors,
         client <- all_clients(sup),
         do: assert client == get_client(sup, client)
 
-    :ct.sleep(2_000)
+    :ct.sleep(2_500)
   end
 
-  defp all_clients(sup) do
-    clients = ["C1", "C2", "C3", "C4", "C5", "C6"]
+  defp clients(sup, clients), do:
     for client <- clients, do: :"#{sup}.#{client}"
-  end
+
+  defp all_clients(sup), do:
+    clients(sup, ["C1", "C2", "C3", "C4", "C5", "C6"])
 
   defp add_node(r, n) do
     :ct.sleep(50) # give time to DHTGenServer to recompute rings
@@ -52,11 +52,11 @@ defmodule N1Test do
   end
 
   defp set_client(s, c), do: set_client(s, c, c)
-  defp set_client(s, c, v),
-    do: GenServer.cast({c, :supervisorring.find(s, c)}, v)
+  defp set_client(s, c, v), do:
+    GenServer.cast({c, :supervisorring.find(s, c)}, v)
 
-  defp get_client(s, c),
-    do: GenServer.call({c, :supervisorring.find(s, c)}, :get)
+  defp get_client(s, c), do:
+    GenServer.call({c, :supervisorring.find(s, c)}, :get)
 
   defp set_all_clients(sup),
     do: Enum.each(all_clients(sup), fn(c) -> set_client(sup, c) end)

@@ -14,7 +14,8 @@ defmodule MySmallApp do
     def add(childspec), do: MyApp.SupRing.add(childspec, "childs")
     def del(childspec), do: MyApp.SupRing.del(childspec, "childs")
     def start_link(sup_name) do
-      :supervisorring.start_link(sup_name, __MODULE__, :test_ring)
+      {ok, args} = MySmallApp.SupRing.init(:test_ring)
+      :supervisorring.start_link(sup_name, __MODULE__, args)
     end
   end
 
