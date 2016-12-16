@@ -3,14 +3,16 @@ defmodule Supervisorring.Mixfile do
 
   def project do
     [ app: :supervisorring,
-      version: "0.0.3",
-      elixir: "~> 1.0.0",
-      deps: [{:nano_ring,"0.0.2",git: "git://github.com/awetzel/nano_ring"}]]
+      version: "0.1.0",
+      elixir: "~> 1.2",
+      deps: [
+        {:gen_serverring, "~> 0.0.3",
+          git: "https://github.com/shopping-adventure/gen_serverring.git"}]]
   end
 
   def application do
-    [ mod: { Supervisorring.App,[] },
-      applications: [:nano_ring,:iex],
-      env: [ data_dir: "./data" ] ]
+    [ mod: {Supervisorring.App, []},
+      applications: [:iex],
+      env: [data_dir: "./data", gen_serverring_name: []]]
   end
 end

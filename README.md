@@ -64,17 +64,27 @@ Example :
 
 ```elixir
 defmodule MySup do
-  @behaviour :supervisorring
+  use :supervisorring
+	import Supervisor.spec
+
   def migrate({_id,_type,_modules},old_server,new_server), do:
     :gen_server.cast(new_server,{:set_state,:gen_server.call(old_server,:get_state)})
+
   def init(_arg) do
     {:ok,{{:one_for_one,2,3},[
       {:dyn_child_handler,NetFSChildHandler},
-      {MySup.C1,{:gen_server,:start_link,[{:local,MySup.C1},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]},
-      {MySup.C2,{:gen_server,:start_link,[{:local,MySup.C2},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]}
+      worker(GenServer, [GenericServer, nil], id: MySup.C1),
+      worker(GenServer, [GenericServer, nil], id: MySup.C2)
     ]}}
   end
 end
+
+defmodule GenericServer do
+  use GenServer
+  def handle_call(:get, _, s), do: {:reply, s, s}
+  def handle_cast(new_state, _), do: {:noreply, new_state}
+end
+
 # if childs file is shared on every node with a shared fs :
 defmodule NetFSChildHandler do
   @behaviour :dyn_child_handler
@@ -88,9 +98,11 @@ defmodule NetFSChildHandler do
 end
 
 :supervisorring.start_link({:local,MySup},MySup,nil)
-c3 = {MySup.C3,{:gen_server,:start_link,[{:local,MySup.C3},GenericServer,nil,[]]},:permanent,2,:worker,[GenericServer]}
+import Supervisor.Spec
+c3 = worker(GenServer, [GenericServer, nil], id: MySup.C3)
 :supervisorring.start_child(MySup,c3)
-:gen_server.call({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:youcall)
+:gen_server.cast({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:youcall)
+:gen_server.call({MySup.C3,:supervisorring.find(MySup,MySup.C3)},:get)
 # get all childs
 :supervisorring.which_children(MySup)
 # get local childs
@@ -130,3 +142,14 @@ local_sup -> children` so that :
 This way children supervised by `supervisorring` can be supervised
 globally in a similar fashion as `local_supervision` locally.
 
+## Testing ##
+Tests using several nodes are relying on [erlang
+common_test](http://erlang.org/doc/apps/common_test/index.html). You can use the
+script `ct_tests.sh` both to generate a spec file for `ct_master` and to launch
+ct_master so that `ct` is able to run `ExUnit` test cases. The generated file
+will run the `*.SUITE.erl` files found in the ct_test directory. Edit the
+generated file (or write your own) to run only a subset of the suites.
+
+For the moment all the nodes used by ct_master have to be on the same host. This
+will be adressed later. This is a limitation of the way the tests are written,
+not a limitation of ct.

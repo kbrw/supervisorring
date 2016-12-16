@@ -1,0 +1,21 @@
+
+{logdir, all_nodes, "./ct_logs"}.
+{logdir, master, "./ct_logs"}.
+
+{init, [n1, n2, n3, n4, n5, n6, n7, n8, n9],
+    {node_start, [
+        {monitor_master, true},
+        {boot_timeout, 10},
+        {init_timeout, 5},
+        {startup_timeout, 5},
+        {startup_functions, [
+            {code, add_patha, ["./ct_test"]},
+            {ct_elixir_wrapper, init, []}
+        ]}
+    ]}
+}.
+
+{suites, [n1], "./ct_test", client_restart_SUITE}.
+{suites, [n2, n3, n4], "./ct_test", ct_example_SUITE}.
+{suites, [n5, n6], "./ct_test", add_client_SUITE}.
+{suites, [n7, n8, n9], "./ct_test", crash_node_SUITE}.

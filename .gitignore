@@ -1,7 +1,11 @@
 /_build
 /deps
+mix.lock
 erl_crash.dump
 *.ez
 *.swp
+*.beam
 data
 childs
+/ct_logs
+/test.spec

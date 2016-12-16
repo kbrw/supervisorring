@@ -1,1 +1,2 @@
-[nano_ring: [data_dir: "data/dev4"]]
+use Mix.Config
+config :gen_serverring, data_dir: "data/dev4"
