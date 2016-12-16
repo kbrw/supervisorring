@@ -121,14 +121,16 @@ defmodule Supervisorring do
     :supervisorring.start_link({:local, name}, module, arg)
   end
 
-  defdelegate [find(supref,id),
-               exec(supref,id,fun,timeout,retry), exec(supref,id,fun,timeout), exec(supref,id,fun),
-               start_child(supref,spec),
-               terminate_child(supref,id),
-               delete_child(supref,id),
-               restart_child(supref,id),
-               which_children(supref),
-               count_children(supref)], to: :supervisorring
+  defdelegate find(supref,id), to: :supervisorring
+  defdelegate exec(supref,id,fun,timeout,retry), to: :supervisorring
+  defdelegate exec(supref,id,fun,timeout), to: :supervisorring
+  defdelegate exec(supref,id,fun), to: :supervisorring
+  defdelegate start_child(supref,spec), to: :supervisorring
+  defdelegate terminate_child(supref,id), to: :supervisorring
+  defdelegate delete_child(supref,id), to: :supervisorring
+  defdelegate restart_child(supref,id), to: :supervisorring
+  defdelegate which_children(supref), to: :supervisorring
+  defdelegate count_children(supref), to: :supervisorring
 end
 
 defmodule :dyn_child_handler do
