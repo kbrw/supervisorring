@@ -1,1 +1,2 @@
-%{"nano_ring": {:git, "git://github.com/awetzel/nano_ring", "41094e4adf4002aced9eb6cc3e1a293d02087611", []}}
+%{"crdtex": {:git, "git://github.com/awetzel/crdtex", "70badd2cb1632c3c10830760ce6c8f6b878856db", []},
+  "nano_ring": {:git, "git://github.com/awetzel/nano_ring", "924aeb552dcf7d936c36c6384b9a80790a2e5feb", []}}
