@@ -10,7 +10,7 @@ defmodule ConsistentHash do
   def ring_for_nodes(nodes) do
     #Place nodes at @vnode_per_node dots in the key hash space {hash(node++vnode_idx),node},
     #then create a bst adapted to consistent hashing traversal, for a given hash, find the next vnode dot in the ring
-    vnodes = nodes |> flat_map(fn n -> (1..@vnode_per_node |> map &{key_as_int("#{n}#{&1}"),n}) end) 
+    vnodes = nodes |> flat_map(fn n -> (1..@vnode_per_node |> map(&{key_as_int("#{n}#{&1}"),n})) end) 
                    |> sort(fn {h1,_},{h2,_}->h2>h1 end)
     vnodes |> bsplit({0,trunc(:math.pow(2,160)-1)},vnodes|>List.first)
   end

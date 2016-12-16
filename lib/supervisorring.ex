@@ -64,25 +64,31 @@ defmodule Supervisorring do
         cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
         all_children = expand_specs(specs)|>reduce(HashDict.new,fn {id,_,_,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
         ## the tricky point is here, take only child specs with an id which is associate with the current node in the ring
-        remote_children_keys = all_children |> Dict.keys |> filter &(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node)
-        wanted_children = all_children |> Dict.drop remote_children_keys
+        remote_children_keys = all_children
+	|> Dict.keys
+	|> filter(&(ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node ))
+        wanted_children = all_children |> Dict.drop(remote_children_keys)
                                              
         ## kill all the local children which should not be in the node, get/start child on the correct node to migrate state if needed
-        cur_children |> filter(fn {id,_}->not Dict.has_key?(wanted_children,id) end) |> each fn {id,{id,child,type,modules}}->
+        cur_children |> filter(fn {id,_} -> not Dict.has_key?(wanted_children,id) end)
+	|> each(fn {id,{id,child,type,modules}} ->
           new_node = ConsistentHash.node_for_key(ring,{sup_ref,id})
           if is_pid(child) do
-            case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Dict.get(id)]) do
-              {:error,{:already_started,existingpid}}->callback.migrate({id,type,modules},child,existingpid)
-              {:ok,newpid}->callback.migrate({id,type,modules},child,newpid)
-              _ -> :nothingtodo
+            case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children |> Dict.get(id)]) do
+              {:error,{:already_started,existingpid}} ->
+		callback.migrate({id,type,modules},child,existingpid)
+              {:ok,newpid} ->
+		callback.migrate({id,type,modules},child,newpid)
+              _ ->
+		:nothingtodo
             end
             sup_ref |> Supervisorring.local_sup_ref |> Supervisor.terminate_child(id)
           end
           sup_ref |> Supervisorring.local_sup_ref |> Supervisor.delete_child(id)
-        end
-        wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each fn {_,childspec}-> 
+        end)
+        wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each(fn {_,childspec}-> 
           Supervisor.start_child(Supervisorring.local_sup_ref(sup_ref),childspec)
-        end
+        end)
         {:noreply,%{state|ring: ring}}
       end
       defp expand_specs(specs) do
