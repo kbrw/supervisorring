@@ -38,9 +38,9 @@ defmodule Supervisorring.App do
       end
       def handle_info({:DOWN,_,:process,_,:killed},nil), do: {:noreply,nil}
       def handle_info({:DOWN,_,:process,{global_sup_ref,_},_},nil) do
-        GenServer.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each fn n ->
+        GenServer.call(NanoRing,:get_up) |> Enum.filter(&(&1!=node)) |> Enum.each(fn n ->
           GenServer.cast({__MODULE__,n},{:terminate,global_sup_ref})
-        end
+        end)
         {:noreply,nil}
       end
       def handle_info({:gen_event_EXIT,_,_},nil), do: exit(:ring_listener_died)
