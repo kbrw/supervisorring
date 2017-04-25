@@ -51,7 +51,7 @@ defmodule Supervisorring do
       def handle_cast({:onnode,id,{sender,ref},fun},state) do
         case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
           n when n==node -> send sender, {ref,:executed,fun.()}
-          othernode -> GenServer.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,sender,fun})
+          othernode -> GenServer.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,{sender,ref},fun})
         end
         {:noreply,state}
       end
