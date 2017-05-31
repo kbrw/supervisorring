@@ -3,9 +3,9 @@ defmodule Supervisorring.Mixfile do
 
   def project do
     [ app: :supervisorring,
-      version: "0.0.3",
-      elixir: "~> 1.3.0",
-      deps: [{:nano_ring,"0.0.2",git: "https://github.com/awetzel/nano_ring"}]]
+      version: "0.0.4",
+      elixir: "~> 1.3",
+      deps: [{:nano_ring,"0.0.3",git: "https://github.com/kbrw/nano_ring"}]]
   end
 
   def application do

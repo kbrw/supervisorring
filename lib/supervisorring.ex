@@ -36,7 +36,7 @@ defmodule Supervisorring do
       def start_link(sup_ref,specs,callback), do:
         GenServer.start_link(__MODULE__,{sup_ref,specs,callback}, name: sup_ref|>Supervisorring.child_manager_ref)
       def init({sup_ref,child_specs,callback}) do
-        :gen_event.add_sup_handler(Supervisorring.Events,RingListener,self)
+        :gen_event.add_sup_handler(Supervisorring.Events,RingListener,self())
         {:noreply,state}=handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: child_specs,callback: callback})
         {:ok,state}
       end
@@ -50,7 +50,7 @@ defmodule Supervisorring do
       # "node_for_key"==node then proc associated with id is running on the node
       def handle_cast({:onnode,id,{sender,ref},fun},state) do
         case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
-          n when n==node -> send sender, {ref,:executed,fun.()}
+          n when n==node() -> send sender, {ref,:executed,fun.()}
           othernode -> GenServer.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,{sender,ref},fun})
         end
         {:noreply,state}
@@ -61,17 +61,17 @@ defmodule Supervisorring do
       end
       def handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: specs,callback: callback}=state) do
         ring = :gen_event.call(NanoRing.Events,Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
-        cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(HashDict.new,fn {id,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
-        all_children = expand_specs(specs)|>reduce(HashDict.new,fn {id,_,_,_,_,_}=e,dic->dic|>Dict.put(id,e) end)
+        cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(Map.new,fn {id,_,_,_}=e,dic->dic|>Map.put(id,e) end)
+        all_children = expand_specs(specs)|>reduce(Map.new,fn {id,_,_,_,_,_}=e,dic->dic|>Map.put(id,e) end)
         ## the tricky point is here, take only child specs with an id which is associate with the current node in the ring
-        remote_children_keys = all_children |> Dict.keys |> filter(&ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node)
-        wanted_children = all_children |> Dict.drop(remote_children_keys)
+        remote_children_keys = all_children |> Map.keys |> filter(&ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node())
+        wanted_children = all_children |> Map.drop(remote_children_keys)
                                              
         ## kill all the local children which should not be in the node, get/start child on the correct node to migrate state if needed
-        cur_children |> filter(fn {id,_}->not Dict.has_key?(wanted_children,id) end) |> each(fn {id,{id,child,type,modules}}->
+        cur_children |> filter(fn {id,_}->not Map.has_key?(wanted_children,id) end) |> each(fn {id,{id,child,type,modules}}->
           new_node = ConsistentHash.node_for_key(ring,{sup_ref,id})
           if is_pid(child) do
-            case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Dict.get(id)]) do
+            case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Map.get(id)]) do
               {:error,{:already_started,existingpid}}->callback.migrate({id,type,modules},child,existingpid)
               {:ok,newpid}->callback.migrate({id,type,modules},child,newpid)
               _ -> :nothingtodo
@@ -80,7 +80,7 @@ defmodule Supervisorring do
           end
           sup_ref |> Supervisorring.local_sup_ref |> Supervisor.delete_child(id)
         end)
-        wanted_children |> filter(fn {id,_}->not Dict.has_key?(cur_children,id) end) |> each(fn {_,childspec}-> 
+        wanted_children |> filter(fn {id,_}->not Map.has_key?(cur_children,id) end) |> each(fn {_,childspec}-> 
           Supervisor.start_child(Supervisorring.local_sup_ref(sup_ref),childspec)
         end)
         {:noreply,%{state|ring: ring}}
@@ -128,18 +128,16 @@ defmodule Supervisorring do
 end
 
 defmodule :dyn_child_handler do
-  use Behaviour
-  defcallback get_all
-  defcallback match(child_id::atom())
-  defcallback add(child_spec :: term())
-  defcallback del(child_id :: atom())
+  @callback get_all() :: any
+  @callback match(child_id::atom) :: any
+  @callback add(child_spec :: term) :: any
+  @callback del(child_id :: atom) :: any
 end
 
 defmodule :supervisorring do
-  use Behaviour
 
   @doc "process migration function, called before deleting a pid when the ring change"
-  defcallback migrate({id::atom(),type:: :worker|:supervisor, modules::[module()]|:dynamic},old_pid::pid(),new_pid::pid())
+  @callback migrate({id::atom,type:: :worker|:supervisor, modules::[module]|:dynamic},old_pid::pid,new_pid::pid) :: any
   @doc """
   supervisor standard callback, but with a new type of childspec to handle an
   external (global) source of child list (necessary for dynamic child starts,
@@ -148,7 +146,7 @@ defmodule :supervisorring do
   new child_spec : {:dyn_child_handler,module::dyn_child_handler}
   works only with :permanent children, because a terminate state is restarted on ring migration
   """
-  defcallback init(args::term())
+  @callback init(args::term) :: any
 
   @doc "find node is fast but rely on local ring"
   def find(supref,id), do: 
@@ -161,8 +159,8 @@ defmodule :supervisorring do
     try_exec(Supervisorring.child_manager_ref(supref),id,fun,timeout,retry)
   def try_exec(_,_,_,_,0), do: exit(:ring_unable_to_exec_fun)
   def try_exec(child_manager,id,fun,timeout,nb_try) do
-    ref = make_ref
-    GenServer.cast child_manager,{:onnode,id,{self,ref},fun}
+    ref = make_ref()
+    GenServer.cast child_manager,{:onnode,id,{self(),ref},fun}
     receive do {^ref,:executed,res} -> res after timeout -> try_exec(child_manager,id,fun,timeout,nb_try-1) end
   end
 
@@ -180,8 +178,8 @@ defmodule :supervisorring do
   """
   def start_child(supref,{id,_,_,_,_,_}=childspec) do
     case exec(supref,id,fn-> Supervisor.start_child(Supervisorring.local_sup_ref(supref),childspec) end) do
-      {:ok,child}->ref = make_ref
-        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self,ref}})
+      {:ok,child}->ref = make_ref()
+        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self(),ref}})
         receive do
           {^ref,{:dyn_child_handler,handler}}-> {handler.add(childspec),child}
           {^ref,_} -> {:error,{:cannot_match_handler,id}}
@@ -201,8 +199,8 @@ defmodule :supervisorring do
   def delete_child(supref,id) do
     case exec(supref,id,fn->Supervisor.delete_child(Supervisorring.local_sup_ref(supref),id) end) do
       :ok->
-        ref = make_ref
-        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self,ref}})
+        ref = make_ref()
+        GenServer.cast(Supervisorring.child_manager_ref(supref),{:get_handler,id,{self(),ref}})
         receive do
           {^ref,{:dyn_child_handler,handler}}-> handler.del(id)
           {^ref,_} -> {:error,{:cannot_match_handler,id}}
@@ -225,7 +223,7 @@ defmodule :supervisorring do
   def count_children(supref) do
     {res,_}=:rpc.multicall(GenServer.call(NanoRing,:get_up)
             |>Enum.to_list,Supervisor,:count_children,[Supervisorring.local_sup_ref(supref)])
-    res |> Enum.reduce([],fn(statdict,acc)->acc|>Dict.merge(statdict,fn _,v1,v2->v1+v2 end) end)
+    res |> Enum.reduce([],fn(statdict,acc)->acc|>Map.merge(statdict,fn _,v1,v2->v1+v2 end) end)
   end
 end
 

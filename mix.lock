@@ -1,1 +1,1 @@
-%{"nano_ring": {:git, "https://github.com/awetzel/nano_ring", "6962be84ca8265bd266ee3f01c319c9375458509", []}}
+%{"nano_ring": {:git, "https://github.com/kbrw/nano_ring", "d6a3506bfaff7d072f4eca31a14133755b2c35e2", []}}
