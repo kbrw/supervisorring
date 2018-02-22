@@ -130,3 +130,8 @@ local_sup -> children` so that :
 This way children supervised by `supervisorring` can be supervised
 globally in a similar fashion as `local_supervision` locally.
 
+## License
+
+supervisorring source code is released under Apache 2 License.
+
+Check the [LICENSE](LICENSE) file for more information.

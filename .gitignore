@@ -1,3 +1,4 @@
+*~
 /_build
 /deps
 erl_crash.dump
@@ -5,3 +6,4 @@ erl_crash.dump
 *.swp
 data
 childs
+/doc
