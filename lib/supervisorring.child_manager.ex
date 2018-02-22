@@ -5,24 +5,39 @@ defmodule Supervisorring.ChildManager do
   use GenServer
 
   defmodule State do
-    @moduledoc """
-    Defines structure used by ChildManager
-    """
+    @moduledoc false
+    #
+    # Defines structure used by ChildManager
+    #
     defstruct sup_ref: nil, child_specs: [], callback: nil, ring: nil
 
     @type t :: %__MODULE__{}
   end
   
   defmodule RingListener do
-    @moduledoc """
-    Notifies ChildManager about cluster changes
-    """
-    use GenEvent
-    
+    @moduledoc false
+    #
+    # Notifies ChildManager about cluster changes
+    #
+    @behaviour :gen_event
+
+    @doc false
+    def init(child_manager), do: {:ok, child_manager}
+
+    @doc false
+    def handle_call(_, s), do: {:ok, :ok, s}
+
+    @doc false
     def handle_event(:new_ring, child_manager) do
       GenServer.cast(child_manager, :sync_children)
       {:ok, child_manager}
     end
+
+    @doc false
+    def handle_info(_info, s), do: {:ok, s}
+
+    @doc false
+    def terminate(_, _s), do: :ok
   end
 
   @doc """
@@ -39,7 +54,7 @@ defmodule Supervisorring.ChildManager do
   ###
   @doc false
   def init({sup_ref, child_specs, callback}) do
-    :gen_event.add_sup_handler(Supervisorring.Events,RingListener, self())
+    :gen_event.add_sup_handler(Supervisorring.Events, RingListener, self())
     
     {:noreply, state} = handle_cast(:sync_children,
       %State{sup_ref: sup_ref, child_specs: child_specs, callback: callback})
