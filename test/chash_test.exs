@@ -11,7 +11,7 @@ defmodule ChashTest do
 
   test "each node should be assign to roughly the same nb of keys" do
     ring = new(@nodes)
-    res_set = @test_set |> map(fn k -> node_for_key(ring,k) end)
+    res_set = @test_set |> map(fn k -> get_node(ring,k) end)
     counts = @nodes |> Enum.map fn n -> (res_set |> Enum.count &(&1==n)) end
     mean = @nb_key/length(@nodes)
     assert(counts|>Enum.all?(&(abs(&1-mean) < mean*0.3)))
@@ -20,10 +20,10 @@ defmodule ChashTest do
   test "if we remove a node, only ~nb_keys/nb_node keys have to move" do
      ring = new(@nodes)
      ring2 = new(@nodes ++ [:n8])
-     res1_set = @test_set |> map(fn k -> {k,node_for_key(ring,k)} end) 
+     res1_set = @test_set |> map(fn k -> {k,get_node(ring,k)} end) 
      IO.inspect res1_set
      
-     res2_set = @test_set |> map(fn k -> {k,node_for_key(ring2,k)} end) 
+     res2_set = @test_set |> map(fn k -> {k,get_node(ring2,k)} end) 
      diff = Set.difference(Enum.into(res1_set, HashSet.new), Enum.into(res2_set, HashSet.new)) |> Set.size
      mean_per_node = Enum.count(@test_set)/length(@nodes)
      assert(diff < mean_per_node*1.1)

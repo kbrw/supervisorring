@@ -43,13 +43,13 @@ defmodule Supervisorring do
       def handle_info({:gen_event_EXIT,_,_},_), do: 
         exit(:ring_listener_died)
       def handle_call({:get_node,id},_,state), do:
-        {:reply,ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}),state}
+        {:reply,ConsistentHash.get_node(state.ring,{state.sup_ref,id}),state}
 
       # reliable execution is ensured by queueing executions on the same queue
       # which modify local children according to ring (on :sync_children message) so if
-      # "node_for_key"==node then proc associated with id is running on the node
+      # "get_node"==node then proc associated with id is running on the node
       def handle_cast({:onnode,id,{sender,ref},fun},state) do
-        case ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}) do
+        case ConsistentHash.get_node(state.ring,{state.sup_ref,id}) do
           n when n==node() -> send sender, {ref,:executed,fun.()}
           othernode -> GenServer.cast({state.sup_ref|>Supervisorring.child_manager_ref,othernode},{:onnode,id,{sender,ref},fun})
         end
@@ -64,12 +64,12 @@ defmodule Supervisorring do
         cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(Map.new,fn {id,_,_,_}=e,dic->dic|>Map.put(id,e) end)
         all_children = expand_specs(specs)|>reduce(Map.new,fn {id,_,_,_,_,_}=e,dic->dic|>Map.put(id,e) end)
         ## the tricky point is here, take only child specs with an id which is associate with the current node in the ring
-        remote_children_keys = all_children |> Map.keys |> filter(&ConsistentHash.node_for_key(ring,{sup_ref,&1}) !== node())
+        remote_children_keys = all_children |> Map.keys |> filter(&ConsistentHash.get_node(ring,{sup_ref,&1}) !== node())
         wanted_children = all_children |> Map.drop(remote_children_keys)
                                              
         ## kill all the local children which should not be in the node, get/start child on the correct node to migrate state if needed
         cur_children |> filter(fn {id,_}->not Map.has_key?(wanted_children,id) end) |> each(fn {id,{id,child,type,modules}}->
-          new_node = ConsistentHash.node_for_key(ring,{sup_ref,id})
+          new_node = ConsistentHash.get_node(ring,{sup_ref,id})
           if is_pid(child) do
             case :rpc.call(new_node,Supervisor,:start_child,[Supervisorring.local_sup_ref(sup_ref),all_children|>Map.get(id)]) do
               {:error,{:already_started,existingpid}}->callback.migrate({id,type,modules},child,existingpid)
