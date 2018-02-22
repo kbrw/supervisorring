@@ -16,7 +16,7 @@ defmodule Supervisorring.App do
         use GenEvent
         def handle_event({:new_up_set,_,nodes},_) do
             :gen_event.notify(Supervisorring.Events,:new_ring)
-            {:ok,ConsistentHash.ring_for_nodes(nodes)}
+            {:ok,ConsistentHash.new(nodes)}
         end
         def handle_event({:new_node_set,_,_},state), do: {:ok,state}
         def handle_call(:get_ring,ring), do: {:ok,ring,ring}
@@ -25,7 +25,7 @@ defmodule Supervisorring.App do
       def start_link, do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
       def init(nil) do
         :gen_event.add_sup_handler(NanoRing.Events,NodesListener,
-          ConsistentHash.ring_for_nodes(GenServer.call(NanoRing,:get_up)))
+          ConsistentHash.new(GenServer.call(NanoRing,:get_up)))
         {:ok,nil}
       end
       def handle_cast({:monitor,global_sup_ref},nil) do

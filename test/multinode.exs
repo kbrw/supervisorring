@@ -54,18 +54,18 @@ defmodule MultiNodeTest do
     master_node = @nodes |> List.first
 
     #calculate targeted topology [nodename: [id1,id2,..], nodename2: [idx,...]]
-    ring = ConsistentHash.ring_for_nodes(@nodes)
+    ring = ConsistentHash.new(@nodes)
     topology = [MySup.C1,MySup.C2]|>reduce([],fn server,acc ->
       acc |> Dict.merge([{ConsistentHash.node_for_key(ring,{MySup,server}),[server]}],fn _,v1,v2->v1++v2 end)
     end)
     #calculate targeted topology with new child c3 : [nodename: [id1,id2,..], nodename2: [idx,...]]
-    ring = ConsistentHash.ring_for_nodes(@nodes)
+    ring = ConsistentHash.new(@nodes)
     topology_withchild = [MySup.C1,MySup.C2,MySup.C3]|>reduce([],fn server,acc ->
       acc |> Dict.merge([{ConsistentHash.node_for_key(ring,{MySup,server}),[server]}],fn _,v1,v2->v1++v2 end)
     end)
     #calculate targeted topology if one node die [nodename: [id1,id2,..], nodename2: [idx,...]]
     c1node = ConsistentHash.node_for_key(ring,{MySup,MySup.C1})
-    c1nodedownring = ConsistentHash.ring_for_nodes(@nodes|>filter(&(&1!=c1node)))
+    c1nodedownring = ConsistentHash.new(@nodes|>filter(&(&1!=c1node)))
     topology_nodedown = [MySup.C1,MySup.C2,MySup.C3]|>reduce([],fn server,acc ->
       acc |> Dict.merge([{ConsistentHash.node_for_key(c1nodedownring,{MySup,server}),[server]}],fn _,v1,v2->v1++v2 end)
     end)
