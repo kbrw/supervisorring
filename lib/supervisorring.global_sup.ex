@@ -6,6 +6,8 @@ defmodule Supervisorring.GlobalSup do
   """
   use Supervisor
 
+  alias Supervisor.Spec
+
   @doc """
   Start a global supervisor
   """
@@ -23,14 +25,10 @@ defmodule Supervisorring.GlobalSup do
 
     GenServer.cast(Supervisorring.SuperSup, {:monitor, Supervisorring.global_sup_ref(sup_ref)})
     
-    localsup_spec = %{ id: Supervisorring.LocalSup,
-		       start: {Supervisorring.LocalSup, [sup_ref, strategy]},
-		       type: :supervisor }
-    childman_spec = %{ id: Supervisorring.ChildManager,
-		       start: {Supervisorring.ChildManager, [sup_ref, specs, module]},
-		       type: :worker }
-
+    localsup_spec = Spec.supervisor(Supervisorring.LocalSup, [sup_ref, strategy])
+    childman_spec = Spec.worker(Supervisorring.ChildManager, [sup_ref, specs, module])
+    
     # Nodes Workers are bounded to directory manager
-    supervise([localsup_spec, childman_spec], strategy: :one_for_all) 
+    {:ok, {%{strategy: :one_for_all}, [localsup_spec, childman_spec]}}
   end
 end
