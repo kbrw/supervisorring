@@ -4,7 +4,7 @@ defmodule Supervisorring.Mixfile do
   def project do
     [
       app: :supervisorring,
-      version: "0.0.4",
+      version: "0.2.0",
       elixir: "~> 1.3",
       deps: deps(),
       package: package(),
