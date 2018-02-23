@@ -10,6 +10,14 @@ defmodule Supervisorring.SuperSup do
   @spec start_link() :: {:ok, pid} | {:error, term}
   def start_link, do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
+  @doc """
+  Start monitoring an item. Called by GlobalSup at startup
+
+  See `Process.monitor`
+  """
+  @spec monitor(atom | pid, atom | pid)
+  def monitor(ref, item), do: GenServer.cast(ref, {:monitor, item})
+
   ###
   ### GenServer callbacks
   ###
@@ -21,8 +29,8 @@ defmodule Supervisorring.SuperSup do
   end
 
   @doc false
-  def handle_cast({:monitor, global_sup_ref}, nil) do
-    Process.monitor(global_sup_ref)
+  def handle_cast({:monitor, item}, nil) do
+    _ref = Process.monitor(item)
     {:noreply, nil}
   end
   def handle_cast({:terminate, global_sup_ref}, nil) do
@@ -31,8 +39,9 @@ defmodule Supervisorring.SuperSup do
   end
 
   @doc false
-  def handle_info({:DOWN,_, :process, _, :killed}, nil), do: {:noreply, nil}
-  def handle_info({:DOWN,_, :process, {global_sup_ref, _}, _}, nil) do
+  def handle_info({:DOWN, _ref, :process, _, :killed}, nil), do: {:noreply, nil}
+  def handle_info({:DOWN, _ref, :process, {global_sup_ref, _}, _}, nil) do
+    # Propagate death to other nodes
     NanoRing.up() |> Enum.filter(&(&1 != node())) |> Enum.each(fn n ->
       GenServer.cast({__MODULE__, n}, {:terminate, global_sup_ref})
     end)
