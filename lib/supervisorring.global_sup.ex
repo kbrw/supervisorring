@@ -23,7 +23,7 @@ defmodule Supervisorring.GlobalSup do
   def init({sup_ref, {module, args}}) do
     {:ok, {strategy, specs}} = module.init(args)
 
-    GenServer.cast(Supervisorring.SuperSup, {:monitor, Supervisorring.global_sup_ref(sup_ref)})
+    Supervisorring.SuperSup.monitor(Supervisorring.global_sup_ref(sup_ref))
     
     localsup_spec = Spec.supervisor(Supervisorring.LocalSup, [sup_ref, strategy])
     childman_spec = Spec.worker(Supervisorring.ChildManager, [sup_ref, specs, module])

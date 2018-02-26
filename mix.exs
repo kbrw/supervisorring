@@ -14,11 +14,13 @@ defmodule Supervisorring.Mixfile do
 
   def application, do: [
     mod: { Supervisorring.App,[] },
-    env: [ data_dir: "./data" ]
+    env: [
+      data_dir: "./data",
+      refresh_nodes: 5_000
+    ]
   ]
 
   defp deps, do: [
-    {:nano_ring, github: "kbrw/nano_ring"},
     {:ex_doc, ">= 0.0.0", only: :dev}
   ]
 

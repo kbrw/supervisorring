@@ -11,7 +11,7 @@ defmodule Supervisorring do
     quote do
       @behaviour :dyn_child_handler
       @behaviour :supervisorring
-      import Supervisor.Spec
+      import Supervisorring.Spec
 
       def migrate(_,_,_), do: :ok
 
@@ -182,7 +182,7 @@ defmodule :supervisorring do
   """
   @spec which_children(Supervisor.supervisor) :: []
   def which_children(supref) do
-    {res, _} = :rpc.multicall(Enum.to_list(NanoRing.up()),
+    {res, _} = :rpc.multicall(Enum.to_list(Supervisorring.Nodes.up()),
       Supervisor, :which_children, [Supervisorring.local_sup_ref(supref)])
     Enum.concat(res)
   end
@@ -192,7 +192,7 @@ defmodule :supervisorring do
   """
   @spec count_children(Supervisor.supervisor) :: integer
   def count_children(supref) do
-    {res, _} = :rpc.multicall(Enum.to_list(NanoRing.up()),
+    {res, _} = :rpc.multicall(Enum.to_list(Supervisorring.Nodes.up()),
       Supervisor, :count_children, [Supervisorring.local_sup_ref(supref)])
     Enum.reduce(res, [], fn(statdict, acc) ->
       Map.merge(acc, statdict, fn _, v1, v2 -> v1 + v2 end)

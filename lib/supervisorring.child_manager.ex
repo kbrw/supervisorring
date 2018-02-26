@@ -17,7 +17,8 @@ defmodule Supervisorring.ChildManager do
   defmodule RingListener do
     @moduledoc false
     #
-    # Notifies ChildManager about cluster changes
+    # Only handle nodes changes notifications from Sueprvisorring.Node
+    # For back pressure handling (really necessary ?)
     #
     @behaviour :gen_event
 
@@ -28,7 +29,7 @@ defmodule Supervisorring.ChildManager do
     def handle_call(_, s), do: {:ok, :ok, s}
 
     @doc false
-    def handle_event(:new_ring, child_manager) do
+    def handle_event(:node_change, child_manager) do
       GenServer.cast(child_manager, :sync_children)
       {:ok, child_manager}
     end
@@ -54,7 +55,7 @@ defmodule Supervisorring.ChildManager do
   ###
   @doc false
   def init({sup_ref, child_specs, callback}) do
-    :gen_event.add_sup_handler(Supervisorring.Events, RingListener, self())
+    Supervisorring.Nodes.subscribe(RingListener, self())
     
     {:noreply, state} = handle_cast(:sync_children,
       %State{sup_ref: sup_ref, child_specs: child_specs, callback: callback})
@@ -94,7 +95,7 @@ defmodule Supervisorring.ChildManager do
     {:noreply, state}
   end
   def handle_cast(:sync_children, %State{sup_ref: sup_ref, child_specs: specs, callback: callback}=state) do
-    ring = :gen_event.call(NanoRing.Events, Supervisorring.NodesListener, :get_ring)
+    ring = ConsistentHash.new(Supervisorring.Nodes.up())
 
     cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |>
       Enum.reduce(Map.new(),fn {id, _, _, _}=e, acc -> Map.put(acc, id, e) end)
