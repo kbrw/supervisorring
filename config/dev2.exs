@@ -1,1 +1,3 @@
-[nano_ring: [data_dir: "data/dev2"]]
+use Mix.Config
+
+config :supervisorring, data_dir: {:priv_dir, "data/dev2"}

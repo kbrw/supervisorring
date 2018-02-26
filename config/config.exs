@@ -1,8 +1,8 @@
 use Mix.Config
-sname = "#{node()}" |> String.split("@") |> hd
+sname = "#{node()}" |> String.split("@") |> hd()
 
 if sname != "nonode" do
   import_config "#{sname}.exs"
 else
-  [nano_ring: [data_dir: "data"]]
+  config :supervisorring, data_dir: {:priv_dir, "data"}
 end

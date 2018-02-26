@@ -4,6 +4,8 @@ defmodule Supervisorring.Nodes do
   """
   use GenServer
 
+  require Logger
+
   defmodule State do
     @moduledoc false
     defstruct nodes: MapSet.new(), up: MapSet.new()
@@ -21,6 +23,14 @@ defmodule Supervisorring.Nodes do
   end
 
   @doc """
+  Reset cluster state
+
+  Remove state file(s) and disconnect nodes
+  """
+  @spec reset() :: :ok
+  def reset, do: GenServer.cast(__MODULE__, :reset)
+
+  @doc """
   Returns list of up nodes
   """
   @spec up() :: [node]
@@ -36,13 +46,13 @@ defmodule Supervisorring.Nodes do
   Join the cluster
   """
   @spec join(node) :: :ok
-  def join(node), do: GenServer.cast(__MODULE__, {:join, node})
+  def join(node), do: GenServer.cast(__MODULE__, {:join, :"#{node}"})
 
   @doc """
   Leave the cluster
   """
   @spec leave(node) :: :ok
-  def leave(node), do: GenServer.cast(__MODULE__, {:leave, node})
+  def leave(node), do: GenServer.cast(__MODULE__, {:leave, :"#{node}"})
 
   @doc """
   Subscribe to nodes changes
@@ -69,34 +79,44 @@ defmodule Supervisorring.Nodes do
   end
 
   @doc false
-  def handle_call(:up, s), do: {:ok, s.up, s}
-  def handle_call(:nodes, s), do: {:ok, s.nodes, s}
+  def handle_call(:up, _, s), do: {:reply, s.up, s}
+  def handle_call(:nodes, _, s), do: {:reply, s.nodes, s}
 
   @doc false
   def handle_cast({:join, node}, %State{ nodes: nodes }=s) do
-    _ = :net_kernel.connect_node(node)
+    Logger.debug("CONNECT #{node}")
+    _ = Node.connect(node)
     {:noreply, write_state(%{ s | nodes: MapSet.put(nodes, node)})}
   end
-  def handle_cast({:leave, node}, %State{ nodes: nodes, up: up }=s) do
-    s = %{ s | nodes: MapSet.delete(nodes, node), up: MapSet.delete(up, node) }
+  def handle_cast({:leave, node}, %State{ nodes: nodes }=s) do
+    Logger.debug("DISCONNECT #{node}")
+    _ = Node.disconnect(node)
+    s = %{ s | nodes: MapSet.delete(nodes, node) }
     :ok = :gen_event.notify(Supervisorring.Events, :node_change)    
     {:noreply, write_state(s)}
   end
   def handle_cast(:refresh, %State{ nodes: nodes, up: up }=s) do
-    :ok = Enum.each(MapSet.difference(nodes, up), &(:net_kernel.connect_node(&1)))
+    :ok = Enum.each(MapSet.difference(nodes, up), &(Node.connect(&1)))
     {:noreply, s}
+  end
+  def handle_cast(:reset, %State{ nodes: nodes }) do
+    :ok = Enum.each(nodes, &(Node.disconnect(&1)))
+    _ = File.rm(data_path())
+    {:noreply, read_state()}
   end
 
   @doc false
   def handle_info({node_info, n}, %State{}=s) do
     s = case node_info do
 	  :nodeup ->
+	    Logger.info("UP #{n}")
 	    %{ s | nodes: MapSet.put(s.nodes, n), up: MapSet.put(s.up, n) }
 	  :nodedown ->
+	    Logger.info("DOWN #{n}")
 	    %{ s | up: MapSet.delete(s.up, n)}
 	end
     :ok = :gen_event.notify(Supervisorring.Events, :node_change)
-    {:ok, write_state(s)}
+    {:noreply, write_state(s)}
   end
 
   @doc false
@@ -106,7 +126,10 @@ defmodule Supervisorring.Nodes do
   ### Priv
   ###
   defp data_path do
-    Path.join Application.get_env(:sueprvisorring, :data_dir, "./data"), "nodes"
+    case Application.get_env(:supervisorring, :data_dir, System.tmp_dir!()) do
+      {:priv_dir, path} -> Path.join [:code.priv_dir(:supervisorring), path, "nodes"]
+      path when is_binary(path) -> Path.join [path, "nodes"]
+    end
   end
 
   defp read_state do
@@ -114,12 +137,16 @@ defmodule Supervisorring.Nodes do
       {:ok, bin} ->
 	%State{ nodes: :erlang.binary_to_term(bin), up: MapSet.new() }
       _ ->
-	%State{ nodes: MapSet.new(), up: MapSet.new() }
+	nodes = [node()]
+	up = if Node.alive?(), do: [node()], else: []
+	%State{ nodes: MapSet.new(nodes), up: MapSet.new(up) }
     end
   end
 
   defp write_state(%State{ nodes: nodes }=s) do
-    File.write!(data_path(), :erlang.term_to_binary(nodes))
+    path = data_path()
+    _ = File.mkdir_p!(Path.dirname(path))
+    File.write!(path, :erlang.term_to_binary(nodes))
     s
   end
 end

@@ -14,8 +14,9 @@ defmodule Supervisorring.Mixfile do
 
   def application, do: [
     mod: { Supervisorring.App,[] },
+    extra_applications: [:logger],
     env: [
-      data_dir: "./data",
+      data_dir: {:priv_dir, "data"},
       refresh_nodes: 5_000
     ]
   ]
