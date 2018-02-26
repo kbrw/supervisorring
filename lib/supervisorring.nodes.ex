@@ -8,7 +8,7 @@ defmodule Supervisorring.Nodes do
 
   defmodule State do
     @moduledoc false
-    defstruct nodes: MapSet.new(), up: MapSet.new()
+    defstruct nodes: MapSet.new(), up: MapSet.new(), persist: false
   end
 
   @typedoc "Nodes changes messages"
@@ -68,8 +68,8 @@ defmodule Supervisorring.Nodes do
   @doc false
   def init(_) do
     :ok = :net_kernel.monitor_nodes(true)
-    %State{ nodes: nodes }=s0 = read_state()
-    :ok = Enum.each(nodes, &(:net_kernel.connect_node(&1)))
+    s0 = init_state(Application.get_env(:supervisorring, :persist_nodes, true))
+    :ok = Enum.each(s0.nodes, &(:net_kernel.connect_node(&1)))
 
     # Try to connect down nodes every `:refresh_nodes` ms
     :timer.apply_interval(Application.get_env(:supervisorring, :refresh_nodes, 5_000),
@@ -86,23 +86,23 @@ defmodule Supervisorring.Nodes do
   def handle_cast({:join, node}, %State{ nodes: nodes }=s) do
     Logger.debug("CONNECT #{node}")
     _ = Node.connect(node)
-    {:noreply, write_state(%{ s | nodes: MapSet.put(nodes, node)})}
+    {:noreply, maybe_write_state(%{ s | nodes: MapSet.put(nodes, node)})}
   end
   def handle_cast({:leave, node}, %State{ nodes: nodes }=s) do
     Logger.debug("DISCONNECT #{node}")
     _ = Node.disconnect(node)
     s = %{ s | nodes: MapSet.delete(nodes, node) }
     :ok = :gen_event.notify(Supervisorring.Events, :node_change)    
-    {:noreply, write_state(s)}
+    {:noreply, maybe_write_state(s)}
   end
   def handle_cast(:refresh, %State{ nodes: nodes, up: up }=s) do
     :ok = Enum.each(MapSet.difference(nodes, up), &(Node.connect(&1)))
     {:noreply, s}
   end
-  def handle_cast(:reset, %State{ nodes: nodes }) do
+  def handle_cast(:reset, %State{ nodes: nodes, persist: persist }) do
     :ok = Enum.each(nodes, &(Node.disconnect(&1)))
     _ = File.rm(data_path())
-    {:noreply, read_state()}
+    {:noreply, init_state(persist)}
   end
 
   @doc false
@@ -116,7 +116,7 @@ defmodule Supervisorring.Nodes do
 	    %{ s | up: MapSet.delete(s.up, n)}
 	end
     :ok = :gen_event.notify(Supervisorring.Events, :node_change)
-    {:noreply, write_state(s)}
+    {:noreply, maybe_write_state(s)}
   end
 
   @doc false
@@ -132,16 +132,23 @@ defmodule Supervisorring.Nodes do
     end
   end
 
-  defp read_state do
+  defp init_state(false) do
+    nodes = [node()]
+    up = if Node.alive?(), do: [node()], else: []
+    %State{ persist: false, nodes: MapSet.new(nodes), up: MapSet.new(up) }
+  end
+  defp init_state(true) do
     case File.read(data_path()) do
       {:ok, bin} ->
-	%State{ nodes: :erlang.binary_to_term(bin), up: MapSet.new() }
+	%State{ nodes: :erlang.binary_to_term(bin), up: MapSet.new(), persist: true }
       _ ->
-	nodes = [node()]
-	up = if Node.alive?(), do: [node()], else: []
-	%State{ nodes: MapSet.new(nodes), up: MapSet.new(up) }
+	s0 = init_state(false)
+	%{ s0 | persist: true }
     end
   end
+
+  defp maybe_write_state(%State{ persist: false }=s), do: s
+  defp maybe_write_state(s), do: write_state(s)
 
   defp write_state(%State{ nodes: nodes }=s) do
     path = data_path()

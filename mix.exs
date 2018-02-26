@@ -17,12 +17,14 @@ defmodule Supervisorring.Mixfile do
     extra_applications: [:logger],
     env: [
       data_dir: {:priv_dir, "data"},
-      refresh_nodes: 5_000
+      refresh_nodes: 5_000,
+      persist_nodes: Mix.env != :test
     ]
   ]
 
   defp deps, do: [
-    {:ex_doc, ">= 0.0.0", only: :dev}
+    {:ex_doc, ">= 0.0.0", only: :dev},
+    {:distributed_test, github: "am-kantox/distributed_test", only: :test}
   ]
 
   defp package, do: [
