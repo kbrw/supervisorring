@@ -23,8 +23,7 @@ defmodule Supervisorring.Mixfile do
   ]
 
   defp deps, do: [
-    {:ex_doc, ">= 0.0.0", only: :dev},
-    {:distributed_test, github: "am-kantox/distributed_test", only: :test}
+    {:ex_doc, ">= 0.0.0", only: :dev}
   ]
 
   defp package, do: [

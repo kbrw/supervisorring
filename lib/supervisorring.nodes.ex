@@ -83,16 +83,23 @@ defmodule Supervisorring.Nodes do
   def handle_call(:nodes, _, s), do: {:reply, s.nodes, s}
 
   @doc false
-  def handle_cast({:join, node}, %State{ nodes: nodes }=s) do
-    Logger.debug("CONNECT #{node}")
-    _ = Node.connect(node)
+  def handle_cast({:join, node}, %State{ nodes: nodes, up: up }=s) do
+    s = case Node.ping(node) do
+	  :pong ->
+	    Logger.info("JOIN #{node}")
+	    :ok = :gen_event.notify(Supervisorring.Events, :node_change)
+	    %{ s | up: MapSet.put(up, node) }
+	  _ ->
+	    Logger.info("JOIN failed #{node}")
+	    s
+	end
     {:noreply, maybe_write_state(%{ s | nodes: MapSet.put(nodes, node)})}
   end
   def handle_cast({:leave, node}, %State{ nodes: nodes }=s) do
     Logger.debug("DISCONNECT #{node}")
     _ = Node.disconnect(node)
     s = %{ s | nodes: MapSet.delete(nodes, node) }
-    :ok = :gen_event.notify(Supervisorring.Events, :node_change)    
+    send_event(:node_change)
     {:noreply, maybe_write_state(s)}
   end
   def handle_cast(:refresh, %State{ nodes: nodes, up: up }=s) do
@@ -106,17 +113,12 @@ defmodule Supervisorring.Nodes do
   end
 
   @doc false
-  def handle_info({node_info, n}, %State{}=s) do
-    s = case node_info do
-	  :nodeup ->
-	    Logger.info("UP #{n}")
-	    %{ s | nodes: MapSet.put(s.nodes, n), up: MapSet.put(s.up, n) }
-	  :nodedown ->
-	    Logger.info("DOWN #{n}")
-	    %{ s | up: MapSet.delete(s.up, n)}
-	end
-    :ok = :gen_event.notify(Supervisorring.Events, :node_change)
-    {:noreply, maybe_write_state(s)}
+  def handle_info({node_info, n}, %State{ nodes: nodes }=s) do
+    if n in nodes do
+      handle_nodeinfo(node_info, n, s)
+    else
+      {:noreply, s}
+    end
   end
 
   @doc false
@@ -125,6 +127,19 @@ defmodule Supervisorring.Nodes do
   ###
   ### Priv
   ###
+  defp handle_nodeinfo(info, node, s) do
+    s = case info do
+	  :nodeup ->
+	    Logger.info("UP #{node}")
+	    %{ s | up: MapSet.put(s.up, node) }
+	  :nodedown ->
+	    Logger.info("DOWN #{node}")
+	    %{ s | up: MapSet.delete(s.up, node)}
+	end
+    send_event(:node_change)
+    {:noreply, maybe_write_state(s)}
+  end
+    
   defp data_path do
     case Application.get_env(:supervisorring, :data_dir, System.tmp_dir!()) do
       {:priv_dir, path} -> Path.join [:code.priv_dir(:supervisorring), path, "nodes"]
@@ -133,9 +148,8 @@ defmodule Supervisorring.Nodes do
   end
 
   defp init_state(false) do
-    nodes = [node()]
-    up = if Node.alive?(), do: [node()], else: []
-    %State{ persist: false, nodes: MapSet.new(nodes), up: MapSet.new(up) }
+    nodes = []
+    %State{ persist: false, nodes: MapSet.new(nodes), up: MapSet.new(nodes) }
   end
   defp init_state(true) do
     case File.read(data_path()) do
@@ -155,5 +169,9 @@ defmodule Supervisorring.Nodes do
     _ = File.mkdir_p!(Path.dirname(path))
     File.write!(path, :erlang.term_to_binary(nodes))
     s
+  end
+
+  defp send_event(evt) do
+    :ok = :gen_event.notify(Supervisorring.Events, evt)
   end
 end

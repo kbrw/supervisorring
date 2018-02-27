@@ -1,8 +1,7 @@
 use Mix.Config
-sname = "#{node()}" |> String.split("@") |> hd()
 
-if sname != "nonode" do
-  import_config "#{sname}.exs"
-else
-  config :supervisorring, data_dir: {:priv_dir, "data"}
+if Mix.env == :test do
+  config :logger, :console,
+    format: "<$node> $time [$level] $message\n"
+  # config :kernel, :dist_auto_connect, false
 end
