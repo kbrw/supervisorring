@@ -1,5 +1,5 @@
 defmodule ConsistentHash do
-  @docmodule "consistent hashing key/node mapping"
+  @moduledoc "consistent hashing key/node mapping"
   import Enum
 
   @doc "Map a given key to a node of the ring in a consistent way (ring modifications move a minimum of keys)"

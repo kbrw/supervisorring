@@ -10,38 +10,33 @@ defmodule Supervisorring do
     def init({sup_ref,{module,args}}) do
       {:ok,{strategy,specs}}=module.init(args)
       GenServer.cast(Supervisorring.App.Sup.SuperSup,{:monitor,sup_ref|>Supervisorring.global_sup_ref})
-      supervise([
-        supervisor(GlobalSup.LocalSup,[sup_ref,strategy]),
-        worker(GlobalSup.ChildManager,[sup_ref,specs,module])
+      Supervisor.init([
+        {GlobalSup.LocalSup,{sup_ref,strategy}},
+        {GlobalSup.ChildManager,{sup_ref,specs,module}}
       ], strategy: :one_for_all) #Nodes Workers are bounded to directory manager
     end
     defmodule LocalSup do
       use Supervisor
-      def start_link(sup_ref,strategy), do: 
+      def start_link({sup_ref,strategy}), do: 
         Supervisor.start_link(__MODULE__,strategy,name: Supervisorring.local_sup_ref(sup_ref))
-      def init(strategy), do: {:ok,{strategy,[]}}
+      def init(strategy), do: Supervisor.init([], strategy: strategy)
     end
     defmodule ChildManager do
       use GenServer
       import Enum
       defmodule State, do: defstruct(sup_ref: nil, child_specs: [], callback: nil, ring: nil)
-      defmodule RingListener do
-        use GenEvent
-        def handle_event(:new_ring,child_manager) do
-          GenServer.cast(child_manager,:sync_children)
-          {:ok,child_manager}
-        end
-      end
 
-      def start_link(sup_ref,specs,callback), do:
+      def start_link({sup_ref,specs,callback}), do:
         GenServer.start_link(__MODULE__,{sup_ref,specs,callback}, name: sup_ref|>Supervisorring.child_manager_ref)
       def init({sup_ref,child_specs,callback}) do
-        :gen_event.add_sup_handler(Supervisorring.Events,RingListener,self())
+        Supervisorring.Events.register
         {:noreply,state}=handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: child_specs,callback: callback})
         {:ok,state}
       end
-      def handle_info({:gen_event_EXIT,_,_},_), do: 
-        exit(:ring_listener_died)
+      def handle_info({:supervisorring_event,:new_ring},state) do
+        GenServer.cast(self(),:sync_children)
+        {:noreply,state}
+      end
       def handle_call({:get_node,id},_,state), do:
         {:reply,ConsistentHash.node_for_key(state.ring,{state.sup_ref,id}),state}
 
@@ -60,7 +55,7 @@ defmodule Supervisorring do
         {:noreply,state}
       end
       def handle_cast(:sync_children,%State{sup_ref: sup_ref,child_specs: specs,callback: callback}=state) do
-        ring = :gen_event.call(NanoRing.Events,Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
+        ring = GenServer.call(Supervisorring.App.Sup.SuperSup.NodesListener,:get_ring)
         cur_children = Supervisor.which_children(Supervisorring.local_sup_ref(sup_ref)) |> reduce(Map.new,fn {id,_,_,_}=e,dic->dic|>Map.put(id,e) end)
         all_children = expand_specs(specs)|>reduce(Map.new,fn {id,_,_,_,_,_}=e,dic->dic|>Map.put(id,e) end)
         ## the tricky point is here, take only child specs with an id which is associate with the current node in the ring
@@ -86,7 +81,7 @@ defmodule Supervisorring do
         {:noreply,%{state|ring: ring}}
       end
       defp expand_specs(specs) do
-        {spec_generators,child_specs} = specs |> partition(&match?({:dyn_child_handler,_},&1))
+        {spec_generators,child_specs} = specs |> split_with(&match?({:dyn_child_handler,_},&1))
         concat(child_specs,spec_generators |> flat_map(fn {:dyn_child_handler,handler}->handler.get_all end))
       end
     end
@@ -96,7 +91,7 @@ defmodule Supervisorring do
     quote do
       @behaviour :dyn_child_handler
       @behaviour :supervisorring
-      import Supervisor.Spec
+      def child_spec(arg) do %{id: __MODULE__, start: {__MODULE__,:start_link, [arg]}, type: :supervisor} end
 
       def migrate(_,_,_), do: :ok
 
@@ -110,7 +105,6 @@ defmodule Supervisorring do
       defoverridable [match: 1, get_all: 0, add: 1, del: 1, migrate: 3]
     end
   end
-
   def start_link(module, arg, name: name) when is_atom(name) do
     :supervisorring.start_link({:local, name}, module, arg)
   end
@@ -125,6 +119,7 @@ defmodule Supervisorring do
   defdelegate restart_child(supref,id), to: :supervisorring
   defdelegate which_children(supref), to: :supervisorring
   defdelegate count_children(supref), to: :supervisorring
+  defdelegate init(children, opts), to: Supervisor
 end
 
 defmodule :dyn_child_handler do

@@ -4,13 +4,13 @@ defmodule Supervisorring.Mixfile do
   def project do
     [ app: :supervisorring,
       version: "0.0.4",
-      elixir: "~> 1.3",
-      deps: [{:nano_ring,"0.0.3",git: "https://github.com/kbrw/nano_ring"}]]
+      elixir: "~> 1.10",
+      deps: [{:nano_ring,"~> 1.0.0",git: "https://github.com/kbrw/nano_ring", branch: "master-1.10"}]]
   end
 
   def application do
     [ mod: { Supervisorring.App,[] },
-      applications: [:nano_ring,:iex],
+      applications: [:nano_ring,:iex,:crypto],
       env: [ data_dir: "./data" ] ]
   end
 end

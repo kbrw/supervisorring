@@ -1,1 +1,3 @@
-%{"nano_ring": {:git, "https://github.com/kbrw/nano_ring", "d6a3506bfaff7d072f4eca31a14133755b2c35e2", []}}
+%{
+  "nano_ring": {:git, "https://github.com/kbrw/nano_ring", "2a67a0e668f320fd55460fb498b493b5e0795d27", [branch: "master-1.10"]},
+}
